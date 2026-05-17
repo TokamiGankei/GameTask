@@ -1,0 +1,15 @@
+Id: GameTaskPlugin_d6d798db-6a1f-4c6e-9b1d-000000000001
+Name: GameTask
+Author: TokamiGankei
+Version: 1.0.0
+Module: GameTaskPlugin.dll
+Type: GenericPlugin
+Icon: icon.png
+Description: >
+  Launch games without UAC elevation prompts by registering them as
+  Windows Scheduled Tasks. Supports automatic executable detection and
+  manual path override for games that use launchers or non-standard
+  directory structures. Playtime tracking uses Playnite's built-in system.
+Links:
+  - Name: GitHub
+    Url: https://github.com/TokamiGankei/GameTask

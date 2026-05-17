@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net48</TargetFramework>
+		<LangVersion>latest</LangVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Reference Include="Playnite.SDK">
+			<HintPath>K:\Playnite\Playnite.SDK.dll</HintPath>
+		</Reference>
+
+		<Reference Include="Microsoft.CSharp" />
+
+		<Reference Include="PresentationFramework" />
+	</ItemGroup>
+
+</Project>
