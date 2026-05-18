@@ -116,7 +116,11 @@ foreach ($line in $lines) {
     catch {}
 
     try {
-        $action = New-ScheduledTaskAction -Execute $exePath
+        $exeDir = Split-Path $exePath -Parent
+
+        $action = New-ScheduledTaskAction `
+            -Execute $exePath `
+            -WorkingDirectory $exeDir
 
         $principal = New-ScheduledTaskPrincipal `
             -UserId $env:USERNAME `
@@ -132,6 +136,9 @@ foreach ($line in $lines) {
             -Action $action `
             -Principal $principal `
             -Settings $settings
+
+        # Set priority to Normal (4) — default for scheduled tasks is Below Normal (7)
+        $task.Settings.Priority = 4
 
         Register-ScheduledTask `
             -TaskName $taskName `
