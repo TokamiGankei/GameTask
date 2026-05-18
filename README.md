@@ -118,9 +118,19 @@ GameTask uses **Playnite's built-in tracking system** (process name detection). 
 Pull requests are welcome! Areas that would benefit from help:
 
 - **Advanced playtime tracking** — see `TrackerManager.cs` for ideas and integration points
+- **Multi-user support** — currently uses `$env:USERNAME` for task principal
+- **Automatic `.pext` build** via GitHub Actions
 
 ---
 
 ## License
 
 MIT — see [LICENSE.txt](LICENSE.txt)
+
+---
+
+## Support
+
+If GameTask saved you some frustration, a coffee is always appreciated! ☕
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-☕-yellow)](https://buymeacoffee.com/TokamiGankei)

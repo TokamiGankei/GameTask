@@ -1,6 +1,6 @@
 Id: GameTaskPlugin_d6d798db-6a1f-4c6e-9b1d-000000000001
 Name: GameTask
-Author: TokamiGankei
+Author: haxx0r-bunny
 Version: 1.0.0
 Module: GameTaskPlugin.dll
 Type: GenericPlugin
@@ -12,4 +12,4 @@ Description: >
   directory structures. Playtime tracking uses Playnite's built-in system.
 Links:
   - Name: GitHub
-    Url: https://github.com/TokamiGankei/GameTask
+    Url: https://github.com/haxx0r-bunny/GameTask
