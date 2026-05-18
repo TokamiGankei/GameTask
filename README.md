@@ -4,6 +4,16 @@ A [Playnite](https://playnite.link/) plugin that lets you launch games **without
 
 ---
 
+## Screenshots
+
+![Context Menu](screenshots/01_menu.png)
+![Choose Executable](screenshots/02_Choice_of_exe.png)
+![Notification](screenshots/03_notification.png)
+![Pending Notification](screenshots/04_notification.png)
+![New Task](screenshots/05_New_Task.png)
+
+---
+
 ## How it works
 
 When you enable GameTask for a game, it:
