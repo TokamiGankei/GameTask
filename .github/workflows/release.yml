@@ -1,0 +1,47 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"          # Dispara quando você fizer push de uma tag como v1.0.1
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "4.8.x"   # .NET Framework 4.8
+
+      - name: Compilar projeto
+        run: dotnet build GameTaskPlugin.csproj -c Release
+
+      - name: Extrair versão da tag
+        id: version
+        run: echo "VERSION=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+
+      - name: Criar o .pext
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $pextName = "GameTask-$version.pext"
+
+          Compress-Archive -Force -Path @(
+            "bin\Release\net4.8\GameTaskPlugin.dll",
+            "extension.yaml",
+            "icon.png"
+          ) -DestinationPath "tmp.zip"
+
+          Rename-Item -Path "tmp.zip" -NewName $pextName
+          echo "PEXT_NAME=$pextName" >> $env:GITHUB_OUTPUT
+        id: pext
+
+      - name: Publicar Release no GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pext.outputs.PEXT_NAME }}
+          generate_release_notes: true   # GitHub gera as notas automaticamente

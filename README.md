@@ -37,7 +37,7 @@ When you enable GameTask for a game, it:
 
 ### Option A — Direct download (recommended)
 
-1. Download the latest `.pext` file from the [Releases](https://github.com/haxx0r-bunny/GameTask/releases) page
+1. Download the latest `.pext` file from the [Releases](https://github.com/TokamiGankei/GameTask/releases) page
 2. Double-click the `.pext` file — Playnite will install it automatically
 3. Restart Playnite
 
