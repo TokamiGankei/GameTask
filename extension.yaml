@@ -1,7 +1,7 @@
 Id: GameTaskPlugin_d6d798db-6a1f-4c6e-9b1d-000000000001
 Name: GameTask
 Author: TokamiGankei
-Version: 1.0.0
+Version: 1.0.2
 Module: GameTaskPlugin.dll
 Type: GenericPlugin
 Icon: icon.png
@@ -13,3 +13,5 @@ Description: >
 Links:
   - Name: GitHub
     Url: https://github.com/TokamiGankei/GameTask
+  - Name: Buy Me a Coffee
+    Url: https://buymeacoffee.com/TokamiGankei

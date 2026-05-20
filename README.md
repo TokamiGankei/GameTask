@@ -11,6 +11,7 @@ A [Playnite](https://playnite.link/) plugin that lets you launch games **without
 ![Notification](screenshots/03_notification.png)
 ![Pending Notification](screenshots/04_notification.png)
 ![New Task](screenshots/05_New_Task.png)
+![Action on Game](screenshots/06_Action_on_Game.png)
 
 ---
 
@@ -21,7 +22,7 @@ When you enable GameTask for a game, it:
 1. Creates a small `.vbs` launcher file for the game
 2. Sets that launcher as the **Play Without UAC** action in Playnite
 3. Registers a **Windows Scheduled Task** that runs the game's `.exe` with elevated rights
-4. When you click Play, Playnite calls the launcher → the launcher triggers the scheduled task → the game starts elevated, with no UAC popup
+4. When you click Play, Playnite calls the launcher → the launcher triggers the scheduled task → the game starts elevated, with no UAC popup, and is automatically brought to the foreground
 
 ---
 
@@ -82,6 +83,8 @@ GameTask will then try to detect the executable automatically again.
 
 ## Menu reference
 
+### Right-click menu (per game)
+
 | Menu item | What it does |
 |---|---|
 | Enable GameTask | Tags the game and sets up the launcher + scheduled task |
@@ -93,6 +96,34 @@ GameTask will then try to detect the executable automatically again.
 | Remove Custom Executable Path | Clears a manually selected path |
 | Open Data Folder | Opens the plugin's data folder in Explorer |
 | Open Task Scheduler | Opens Windows Task Scheduler |
+
+### Main menu (Extensions → GameTask)
+
+| Menu item | What it does |
+|---|---|
+| Repair All Tagged Games | Runs Repair on every game with the GameTask tag at once |
+| Clean Orphan Tasks | Removes scheduled tasks that no longer have a matching game in the library |
+| Settings → Bring Game to Foreground | Toggles ON/OFF: automatically focuses the game window after launch |
+| Settings → Detect Orphan Tasks on Startup | Toggles ON/OFF: checks for orphan tasks every time Playnite starts |
+
+---
+
+## Settings
+
+Settings are toggled directly from **Extensions → GameTask → Settings** and saved automatically. No restart required for most changes — though toggling "Bring Game to Foreground" takes effect after running **Repair All** so the launchers are regenerated.
+
+| Setting | Default | Description |
+|---|---|---|
+| Bring Game to Foreground | ON | After launching, GameTask waits for the game process and brings its window to the front. Useful in Playnite fullscreen mode. |
+| Detect Orphan Tasks on Startup | ON | On each Playnite startup, compares the library against the Task Scheduler and notifies if orphan tasks are found. |
+
+---
+
+## Orphan task cleanup
+
+An **orphan task** is a Windows Scheduled Task under `\GameTask\` that no longer has a matching game in your Playnite library — for example, after uninstalling or removing a game without using "Disable GameTask" first.
+
+GameTask detects these automatically on startup (if enabled) and shows a clickable notification. You can also trigger cleanup manually via **Extensions → GameTask → Clean Orphan Tasks**. Both methods require a one-time UAC prompt to remove the tasks.
 
 ---
 
@@ -110,13 +141,19 @@ GameTask uses **Playnite's built-in tracking system** (process name detection). 
 → The scheduled task may not have been created yet. Look for the notification in Playnite and click it to run the elevated helper.
 
 **No notification appears after enabling**  
-→ Right-click the game → **GameTask → Create Pending Tasks**
+→ Go to **Extensions → GameTask → Repair All Tagged Games**, then click the notification that appears.
 
 **The task was created but the game doesn't launch**  
-→ Right-click → **GameTask → Fix Executable Path** and point it to the correct `.exe`
+→ Right-click the game → **GameTask → Fix Executable Path** and point it to the correct `.exe`
+
+**The game launches but opens behind other windows**  
+→ Make sure "Bring Game to Foreground" is ON in **Extensions → GameTask → Settings**, then run **Repair All Tagged Games** to regenerate the launchers.
 
 **I want to start over for a game**  
 → Right-click → **GameTask → Rebuild Selected**
+
+**I have leftover tasks from games I removed**  
+→ Go to **Extensions → GameTask → Clean Orphan Tasks**
 
 **Where are the logs?**  
 → Right-click any game → **GameTask → Open Data Folder** → `Logs\GameTask.log`

@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Collections.Generic;
 using Playnite.SDK.Models;
 
 namespace GameTaskPlugin
@@ -13,6 +13,7 @@ namespace GameTaskPlugin
         private readonly string cacheFolder;
         private readonly string pendingFile;
         private readonly string deleteFile;
+        private readonly string knownTasksFile;
 
         public TaskManager(Logger logger, string pluginDataPath)
         {
@@ -21,11 +22,13 @@ namespace GameTaskPlugin
             cacheFolder = Path.Combine(pluginDataPath, "Cache");
             Directory.CreateDirectory(cacheFolder);
 
-            pendingFile = Path.Combine(cacheFolder, "PendingTasks.txt");
-            deleteFile = Path.Combine(cacheFolder, "DeleteTasks.txt");
+            pendingFile    = Path.Combine(cacheFolder, "PendingTasks.txt");
+            deleteFile     = Path.Combine(cacheFolder, "DeleteTasks.txt");
+            knownTasksFile = Path.Combine(cacheFolder, "KnownTasks.txt");
 
-            if (!File.Exists(pendingFile)) File.WriteAllText(pendingFile, string.Empty);
-            if (!File.Exists(deleteFile)) File.WriteAllText(deleteFile, string.Empty);
+            if (!File.Exists(pendingFile))    File.WriteAllText(pendingFile,    string.Empty);
+            if (!File.Exists(deleteFile))     File.WriteAllText(deleteFile,     string.Empty);
+            if (!File.Exists(knownTasksFile)) File.WriteAllText(knownTasksFile, string.Empty);
         }
 
         // =========================================================
@@ -73,7 +76,6 @@ namespace GameTaskPlugin
 
             string entry = $"{game.Name}|{resolvedExe}";
 
-            // Remove any existing entry for this game before adding updated one
             var existing = File.ReadAllLines(pendingFile)
                 .Where(l => !l.StartsWith(game.Name + "|", StringComparison.OrdinalIgnoreCase))
                 .ToList();
@@ -105,7 +107,6 @@ namespace GameTaskPlugin
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = line.Split('|');
                 if (parts.Length < 2) continue;
-
                 result.Add((parts[0], parts[1]));
             }
 
@@ -126,7 +127,7 @@ namespace GameTaskPlugin
         {
             if (game == null) return;
 
-            string taskName = $"GameTask_v1_{Utils.MakeSafeTaskName(game.Name)}";
+            string taskName = GetTaskName(game);
             var existing = File.ReadAllLines(deleteFile);
             if (!existing.Any(l => l.Equals(taskName, StringComparison.OrdinalIgnoreCase)))
             {
@@ -137,17 +138,36 @@ namespace GameTaskPlugin
 
         public List<string> GetDeleteTasks()
         {
-            return File.Exists(deleteFile) ? File.ReadAllLines(deleteFile).ToList() : new List<string>();
+            return File.Exists(deleteFile)
+                ? File.ReadAllLines(deleteFile).Where(l => !string.IsNullOrWhiteSpace(l)).ToList()
+                : new List<string>();
         }
 
         // =========================================================
-        // Internal Helpers
+        // Known Tasks  (used for orphan detection)
+        // Writes the full list of task names the plugin currently
+        // manages so the PowerShell orphan-cleaner can compare
+        // against what's actually in the Task Scheduler.
         // =========================================================
+
+        public void WriteKnownTasks(IEnumerable<string> taskNames)
+        {
+            File.WriteAllLines(knownTasksFile, taskNames);
+            logger.Log($"KnownTasks written: {taskNames.Count()} entries.");
+        }
+
+        // =========================================================
+        // Helpers
+        // =========================================================
+
+        public static string GetTaskName(Game game)
+            => $"GameTask_v1_{Utils.MakeSafeTaskName(game.Name)}";
 
         private GameAction GetValidAction(Game game, string ignoredActionName)
         {
             if (game.GameActions == null) return null;
-            return game.GameActions.FirstOrDefault(a => a != null && a.Name != ignoredActionName && !string.IsNullOrWhiteSpace(a.Path));
+            return game.GameActions.FirstOrDefault(
+                a => a != null && a.Name != ignoredActionName && !string.IsNullOrWhiteSpace(a.Path));
         }
 
         public string ResolveExecutable(Game game, GameAction action)
