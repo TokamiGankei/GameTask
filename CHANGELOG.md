@@ -14,6 +14,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 - `SettingsView.xaml` not declared as `<Page>` in `.csproj`, preventing XAML compilation
 - Missing `WindowsBase` reference in `GameTaskPlugin.csproj`, required by `SettingsView.xaml`
 - Switched project SDK to `Microsoft.NET.Sdk.WindowsDesktop` with `<UseWPF>true</UseWPF>` — required for XAML compilation and `InitializeComponent` generation
+- Plugin failing to load in Playnite due to `Newtonsoft.Json` version conflict — now uses the version bundled with Playnite instead of packaging its own
 ---
 
 ## [v1.2.0] — 2026-05-20
