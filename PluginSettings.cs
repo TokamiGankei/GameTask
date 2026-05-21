@@ -3,15 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-using Newtonsoft.Json;
-
 using Playnite.SDK;
 using Playnite.SDK.Plugins;
 
 namespace GameTaskPlugin
 {
     // =========================================================
-    // MODEL — serialized to Config/Settings.json
+    // MODEL
     // =========================================================
     public class PluginSettings : ObservableObject
     {
@@ -39,8 +37,7 @@ namespace GameTaskPlugin
     }
 
     // =========================================================
-    // SETTINGS PROVIDER — implements ISettings for Playnite's
-    // native settings page (Settings → Plugins → GameTask)
+    // SETTINGS PROVIDER
     // =========================================================
     public class GameTaskSettings : ISettings
     {
@@ -74,10 +71,7 @@ namespace GameTaskPlugin
             Settings.DetectCorruptedTasks    = snapshot.DetectCorruptedTasks;
         }
 
-        public void EndEdit()
-        {
-            settingsManager.Save();
-        }
+        public void EndEdit() => settingsManager.Save();
 
         public bool VerifySettings(out List<string> errors)
         {
@@ -87,7 +81,7 @@ namespace GameTaskPlugin
     }
 
     // =========================================================
-    // PERSISTENCE — loads / saves Settings.json
+    // PERSISTENCE — simple key=value format, no external deps
     // =========================================================
     public class SettingsManager
     {
@@ -104,26 +98,47 @@ namespace GameTaskPlugin
             string configFolder = Path.Combine(pluginDataPath, "Config");
             Directory.CreateDirectory(configFolder);
 
-            settingsFile = Path.Combine(configFolder, "Settings.json");
+            settingsFile = Path.Combine(configFolder, "Settings.ini");
             Load();
         }
 
         private void Load()
         {
+            current = new PluginSettings();
+
             try
             {
-                if (File.Exists(settingsFile))
+                if (!File.Exists(settingsFile))
                 {
-                    string json = File.ReadAllText(settingsFile, Encoding.UTF8);
-                    current = JsonConvert.DeserializeObject<PluginSettings>(json)
-                              ?? new PluginSettings();
-                    logger.Log("Settings loaded.");
-                }
-                else
-                {
-                    current = new PluginSettings();
                     Save();
+                    return;
                 }
+
+                foreach (var line in File.ReadAllLines(settingsFile, Encoding.UTF8))
+                {
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
+
+                    var parts = line.Split('=');
+                    if (parts.Length != 2) continue;
+
+                    string key   = parts[0].Trim();
+                    string value = parts[1].Trim();
+
+                    switch (key)
+                    {
+                        case "BringWindowToForeground":
+                            current.BringWindowToForeground = value == "true";
+                            break;
+                        case "DetectOrphanTasks":
+                            current.DetectOrphanTasks = value == "true";
+                            break;
+                        case "DetectCorruptedTasks":
+                            current.DetectCorruptedTasks = value == "true";
+                            break;
+                    }
+                }
+
+                logger.Log("Settings loaded.");
             }
             catch (Exception ex)
             {
@@ -136,8 +151,15 @@ namespace GameTaskPlugin
         {
             try
             {
-                string json = JsonConvert.SerializeObject(current, Formatting.Indented);
-                File.WriteAllText(settingsFile, json, Encoding.UTF8);
+                var lines = new[]
+                {
+                    "# GameTask Settings",
+                    $"BringWindowToForeground={BoolToStr(current.BringWindowToForeground)}",
+                    $"DetectOrphanTasks={BoolToStr(current.DetectOrphanTasks)}",
+                    $"DetectCorruptedTasks={BoolToStr(current.DetectCorruptedTasks)}"
+                };
+
+                File.WriteAllLines(settingsFile, lines, Encoding.UTF8);
                 logger.Log("Settings saved.");
             }
             catch (Exception ex)
@@ -145,5 +167,7 @@ namespace GameTaskPlugin
                 logger.Log($"ERROR saving settings: {ex.Message}");
             }
         }
+
+        private static string BoolToStr(bool value) => value ? "true" : "false";
     }
 }
