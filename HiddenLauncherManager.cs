@@ -45,9 +45,11 @@ namespace GameTaskPlugin
 
         private static void WriteVbs(string vbsPath, string ps1Path)
         {
+            // Use chr(34) for embedded quotes — avoids 800A0401 syntax errors
+            // that occur when escaping quotes directly inside VBScript strings.
             File.WriteAllText(vbsPath,
                 "Set shell = CreateObject(\"WScript.Shell\")\r\n" +
-                $"shell.Run \"powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File \"\"\"{ps1Path}\"\"\" \", 0, False\r\n");
+                $"shell.Run \"powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File \" & Chr(34) & \"{ps1Path}\" & Chr(34), 0, False\r\n");
         }
 
         public string GetCreateLauncherPath()       => createLauncherPath;
