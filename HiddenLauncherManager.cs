@@ -14,6 +14,8 @@ namespace GameTaskPlugin
         private readonly string deletePs1Path;
         private readonly string cleanOrphansPs1Path;
 
+        public readonly string ResultFile; // written by CreateTasks.ps1 for success notification
+
         public HiddenLauncherManager(Logger logger, string pluginDataPath)
         {
             this.logger = logger;
@@ -24,6 +26,7 @@ namespace GameTaskPlugin
             createPs1Path       = Path.Combine(cacheFolder, "CreateTasks.ps1");
             deletePs1Path       = Path.Combine(cacheFolder, "DeleteTasks.ps1");
             cleanOrphansPs1Path = Path.Combine(cacheFolder, "CleanOrphanTasks.ps1");
+            ResultFile          = Path.Combine(cacheFolder, "LastCreateResult.txt");
 
             File.WriteAllText(createPs1Path,       GetCreateTasksScript());
             File.WriteAllText(deletePs1Path,       GetDeleteTasksScript());
@@ -53,6 +56,8 @@ namespace GameTaskPlugin
 
         // =====================================================
         // CREATE TASKS SCRIPT
+        // Writes LastCreateResult.txt with "created=N|failed=M"
+        // so the plugin can show a success/failure notification.
         // =====================================================
 
         private string GetCreateTasksScript()
@@ -60,13 +65,18 @@ namespace GameTaskPlugin
             return @"
 $taskFolder  = '\GameTask\'
 $pendingFile = Join-Path $PSScriptRoot 'PendingTasks.txt'
+$resultFile  = Join-Path $PSScriptRoot 'LastCreateResult.txt'
 $logFile     = Join-Path $PSScriptRoot '..\Logs\PS1.log'
 
 New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
-Add-Content $logFile ("`n===== CREATE START " + (Get-Date) + " =====`n")
+Add-Content $logFile (""`n===== CREATE START "" + (Get-Date) + "" ====="")`n"")
+
+$created = 0
+$failed  = 0
 
 if (!(Test-Path $pendingFile)) {
     Add-Content $logFile 'No PendingTasks.txt found.'
+    Set-Content $resultFile ""created=0|failed=0""
     exit
 }
 
@@ -88,6 +98,7 @@ foreach ($line in $lines) {
     $parts = $line.Split('|')
     if ($parts.Count -lt 2) {
         Add-Content $logFile ""SKIP invalid line: $line""
+        $failed++
         continue
     }
 
@@ -96,6 +107,7 @@ foreach ($line in $lines) {
 
     if (!(Test-Path $exePath)) {
         Add-Content $logFile ""SKIP exe not found: $gameName -> $exePath""
+        $failed++
         continue
     }
 
@@ -116,13 +128,17 @@ foreach ($line in $lines) {
 
         Register-ScheduledTask -TaskName $taskName -TaskPath $taskFolder -InputObject $task -Force
         Add-Content $logFile ""CREATED: $taskName -> $exePath""
+        $created++
     }
     catch {
         Add-Content $logFile ""ERROR creating task: $taskName -> $_""
+        $failed++
     }
 }
 
 Clear-Content $pendingFile
+Set-Content $resultFile ""created=$created|failed=$failed""
+Add-Content $logFile (""created=$created failed=$failed"")
 Add-Content $logFile ('===== CREATE END ' + (Get-Date) + ' =====`n')
 ";
         }
@@ -139,7 +155,7 @@ $deleteFile = Join-Path $PSScriptRoot 'DeleteTasks.txt'
 $logFile    = Join-Path $PSScriptRoot '..\Logs\PS1.log'
 
 New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
-Add-Content $logFile ("`n===== DELETE START " + (Get-Date) + " =====`n")
+Add-Content $logFile (""`n===== DELETE START "" + (Get-Date) + "" ====="")`n"")
 
 if (!(Test-Path $deleteFile)) {
     Add-Content $logFile 'No DeleteTasks.txt found.'
@@ -167,9 +183,6 @@ Add-Content $logFile ('===== DELETE END ' + (Get-Date) + ' =====`n')
 
         // =====================================================
         // CLEAN ORPHAN TASKS SCRIPT
-        // Reads KnownTasks.txt (written by the plugin before
-        // triggering elevation) and removes any scheduled task
-        // in \GameTask\ that is NOT in that list.
         // =====================================================
 
         private string GetCleanOrphansScript()
@@ -180,9 +193,8 @@ $knownTasksFile  = Join-Path $PSScriptRoot 'KnownTasks.txt'
 $logFile         = Join-Path $PSScriptRoot '..\Logs\PS1.log'
 
 New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
-Add-Content $logFile ("`n===== CLEAN ORPHANS START " + (Get-Date) + " =====`n")
+Add-Content $logFile (""`n===== CLEAN ORPHANS START "" + (Get-Date) + "" ====="")`n"")
 
-# Load the list of task names that the plugin knows about
 $knownTasks = @()
 if (Test-Path $knownTasksFile) {
     $knownTasks = [System.IO.File]::ReadAllLines($knownTasksFile, [System.Text.Encoding]::UTF8) |

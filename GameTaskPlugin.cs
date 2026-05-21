@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Controls;
 
 using Playnite.SDK;
 using Playnite.SDK.Events;
@@ -22,37 +25,52 @@ namespace GameTaskPlugin
         private readonly IPlayniteAPI api;
         private readonly string pluginDataPath;
 
-        private readonly Logger               logger;
-        private readonly SettingsManager      settingsManager;
-        private readonly TaskManager          taskManager;
-        private readonly LauncherManager      launcherManager;
-        private readonly ActionManager        actionManager;
+        private readonly Logger                logger;
+        private readonly SettingsManager       settingsManager;
+        private readonly GameTaskSettings      gameTaskSettings;
+        private readonly TaskManager           taskManager;
+        private readonly LauncherManager       launcherManager;
+        private readonly ActionManager         actionManager;
         private readonly HiddenLauncherManager hiddenLauncherManager;
-        private readonly NotificationManager  notificationManager;
-        private readonly TrackerManager       trackerManager;
-        private readonly PathManager          pathManager;
+        private readonly NotificationManager   notificationManager;
+        private readonly TrackerManager        trackerManager;
+        private readonly PathManager           pathManager;
 
         public GameTaskPlugin(IPlayniteAPI api) : base(api)
         {
             this.api = api;
 
-            Properties = new GenericPluginProperties { HasSettings = false };
+            Properties = new GenericPluginProperties { HasSettings = true };
 
             pluginDataPath = GetPluginUserDataPath();
             Directory.CreateDirectory(pluginDataPath);
 
-            logger              = new Logger(pluginDataPath);
-            settingsManager     = new SettingsManager(logger, pluginDataPath);
-            taskManager         = new TaskManager(logger, pluginDataPath);
-            launcherManager     = new LauncherManager(logger, pluginDataPath, settingsManager);
-            actionManager       = new ActionManager(logger, launcherManager);
+            logger                = new Logger(pluginDataPath);
+            settingsManager       = new SettingsManager(logger, pluginDataPath);
+            gameTaskSettings      = new GameTaskSettings(this, settingsManager);
+            taskManager           = new TaskManager(logger, pluginDataPath);
+            launcherManager       = new LauncherManager(logger, pluginDataPath, settingsManager);
+            actionManager         = new ActionManager(logger, launcherManager);
             hiddenLauncherManager = new HiddenLauncherManager(logger, pluginDataPath);
-            trackerManager      = new TrackerManager(logger);
-            pathManager         = new PathManager(logger, pluginDataPath, taskManager);
-            notificationManager = new NotificationManager(api, RunPendingTasks, pluginDataPath);
+            trackerManager        = new TrackerManager(logger);
+            pathManager           = new PathManager(logger, pluginDataPath, taskManager);
+            notificationManager   = new NotificationManager(api, RunPendingTasks, pluginDataPath);
 
             logger.Log("GameTask plugin started.");
         }
+
+        // =====================================================
+        // SETTINGS PAGE
+        // =====================================================
+
+        public override ISettings GetSettings(bool firstRunSettings) => gameTaskSettings;
+
+        public override UserControl GetSettingsView(bool firstRunSettings)
+            => new SettingsView { DataContext = gameTaskSettings };
+
+        // =====================================================
+        // STARTUP
+        // =====================================================
 
         public override void OnApplicationStarted(OnApplicationStartedEventArgs args)
         {
@@ -61,6 +79,9 @@ namespace GameTaskPlugin
 
             if (settingsManager.Current.DetectOrphanTasks)
                 CheckForOrphanTasks();
+
+            if (settingsManager.Current.DetectCorruptedTasks)
+                CheckForCorruptedTasks();
 
             notificationManager.ShowPendingNotification();
         }
@@ -82,15 +103,12 @@ namespace GameTaskPlugin
 
         // =====================================================
         // ORPHAN TASK DETECTION
-        // Collects all task names the plugin knows about and
-        // shows a notification if the Task Scheduler has extras.
         // =====================================================
 
         private void CheckForOrphanTasks()
         {
             try
             {
-                // Build the set of task names that should exist
                 var knownNames = api.Database.Games
                     .Where(HasGameTaskTag)
                     .Select(g => TaskManager.GetTaskName(g))
@@ -98,7 +116,6 @@ namespace GameTaskPlugin
 
                 taskManager.WriteKnownTasks(knownNames);
 
-                // Query the Task Scheduler for everything under \GameTask\
                 var orphans = new List<string>();
 
                 using (var proc = new Process())
@@ -115,21 +132,18 @@ namespace GameTaskPlugin
 
                     foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                     {
-                        // CSV lines: "\\GameTask\\TaskName","Status",...
                         string cell = line.Split(',')[0].Trim('"');
-                        string name = System.IO.Path.GetFileName(cell);
+                        string name = Path.GetFileName(cell);
 
                         if (!string.IsNullOrWhiteSpace(name) &&
                             !knownNames.Contains(name, StringComparer.OrdinalIgnoreCase))
-                        {
                             orphans.Add(name);
-                        }
                     }
                 }
 
                 if (orphans.Count == 0)
                 {
-                    logger.Log("Orphan check: no orphans found.");
+                    logger.Log("Orphan check: none found.");
                     return;
                 }
 
@@ -139,49 +153,98 @@ namespace GameTaskPlugin
                     "GameTaskOrphans",
                     $"GameTask: {orphans.Count} orphan task(s) found in Task Scheduler. Click to clean up.",
                     NotificationType.Info,
-                    () => CleanOrphanTasks()
-                ));
+                    () => CleanOrphanTasks()));
             }
-            catch (Exception ex)
+            catch (Exception ex) { logger.Log($"ERROR in orphan check: {ex.Message}"); }
+        }
+
+        // =====================================================
+        // CORRUPTED TASK DETECTION
+        // A task is corrupted when its registered .exe no longer
+        // exists on disk (game moved, uninstalled, etc.).
+        // =====================================================
+
+        private void CheckForCorruptedTasks()
+        {
+            try
             {
-                logger.Log($"ERROR in orphan check: {ex.Message}");
+                var taggedGames = api.Database.Games.Where(HasGameTaskTag).ToList();
+                var corrupted   = new List<Game>();
+
+                foreach (var game in taggedGames)
+                {
+                    // 1. Custom path takes priority
+                    string customExe = pathManager.GetCustomPath(game);
+                    if (!string.IsNullOrWhiteSpace(customExe))
+                    {
+                        if (!File.Exists(customExe))
+                        {
+                            logger.Log($"Corrupted (custom exe missing): {game.Name} -> {customExe}");
+                            corrupted.Add(game);
+                        }
+                        continue;
+                    }
+
+                    // 2. Resolve via game actions
+                    var action = game.GameActions?.FirstOrDefault(a =>
+                        a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path));
+
+                    if (action == null) continue;
+
+                    string exePath = taskManager.ResolveExecutable(game, action);
+
+                    if (!string.IsNullOrWhiteSpace(exePath) && !File.Exists(exePath))
+                    {
+                        logger.Log($"Corrupted (exe missing): {game.Name} -> {exePath}");
+                        corrupted.Add(game);
+                    }
+                }
+
+                if (corrupted.Count == 0)
+                {
+                    logger.Log("Corrupted task check: none found.");
+                    return;
+                }
+
+                logger.Log($"Corrupted task check: {corrupted.Count} found.");
+
+                foreach (var game in corrupted)
+                {
+                    notificationManager.ShowExecutableFixNotification(
+                        game,
+                        () => FixExecutablePath(game));
+                }
             }
+            catch (Exception ex) { logger.Log($"ERROR in corrupted task check: {ex.Message}"); }
         }
 
         // =====================================================
         // CLEAN ORPHAN TASKS
-        // Writes the known-tasks list and triggers the elevated
-        // PowerShell script that removes anything not on that list.
         // =====================================================
 
         private void CleanOrphanTasks()
         {
             try
             {
-                // Refresh the known-tasks file right before elevation
                 var knownNames = api.Database.Games
                     .Where(HasGameTaskTag)
                     .Select(g => TaskManager.GetTaskName(g))
                     .ToList();
 
                 taskManager.WriteKnownTasks(knownNames);
-
                 logger.Log("Requesting elevated orphan cleanup...");
 
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName       = "wscript.exe",
-                    Arguments      = $"\"{hiddenLauncherManager.GetCleanOrphansLauncherPath()}\"",
-                    Verb           = "runas",
+                    FileName        = "wscript.exe",
+                    Arguments       = $"\"{hiddenLauncherManager.GetCleanOrphansLauncherPath()}\"",
+                    Verb            = "runas",
                     UseShellExecute = true
                 });
 
                 api.Notifications.Remove("GameTaskOrphans");
             }
-            catch (Exception ex)
-            {
-                logger.Log($"ERROR running orphan cleanup: {ex.Message}");
-            }
+            catch (Exception ex) { logger.Log($"ERROR running orphan cleanup: {ex.Message}"); }
         }
 
         // =====================================================
@@ -211,37 +274,7 @@ namespace GameTaskPlugin
         }
 
         // =====================================================
-        // TOGGLE SETTINGS
-        // =====================================================
-
-        private void ToggleBringToForeground()
-        {
-            settingsManager.Current.BringWindowToForeground = !settingsManager.Current.BringWindowToForeground;
-            settingsManager.Save();
-
-            bool enabled = settingsManager.Current.BringWindowToForeground;
-            logger.Log($"BringWindowToForeground set to: {enabled}");
-
-            api.Dialogs.ShowMessage(
-                $"\"Bring game window to foreground\" is now {(enabled ? "ON" : "OFF")}.\n\nRun \"Repair All\" so the launchers are regenerated with the new setting.",
-                "GameTask – Settings");
-        }
-
-        private void ToggleDetectOrphans()
-        {
-            settingsManager.Current.DetectOrphanTasks = !settingsManager.Current.DetectOrphanTasks;
-            settingsManager.Save();
-
-            bool enabled = settingsManager.Current.DetectOrphanTasks;
-            logger.Log($"DetectOrphanTasks set to: {enabled}");
-
-            api.Dialogs.ShowMessage(
-                $"\"Detect orphan tasks on startup\" is now {(enabled ? "ON" : "OFF")}.",
-                "GameTask – Settings");
-        }
-
-        // =====================================================
-        // REPAIR (single / selected)
+        // REPAIR (single game)
         // =====================================================
 
         private void RepairGameTask(Game game)
@@ -277,7 +310,7 @@ namespace GameTaskPlugin
 
             if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
             {
-                logger.Log($"Tracking not configured, EXE not found: {game.Name}");
+                logger.Log($"EXE not found: {game.Name}");
                 notificationManager.ShowExecutableFixNotification(game, () => FixExecutablePath(game));
             }
             else
@@ -307,7 +340,7 @@ namespace GameTaskPlugin
             actionManager.CreateOrUpdatePlayAction(game, api);
 
             notificationManager.ShowPendingNotification();
-            logger.Log($"Pending task queued after executable fix: {game.Name}");
+            logger.Log($"Pending task queued after fix: {game.Name}");
 
             api.Dialogs.ShowMessage(
                 $"Executable configured for \"{game.Name}\".\n\nClick \"Create Pending Tasks\" in the GameTask menu (or the notification) to register the Windows task with elevated rights.",
@@ -453,9 +486,9 @@ namespace GameTaskPlugin
             try
             {
                 using var process = new Process();
-                process.StartInfo.FileName       = "schtasks.exe";
-                process.StartInfo.Arguments      = $"/query /tn \"\\GameTask\\{taskName}\"";
-                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.FileName        = "schtasks.exe";
+                process.StartInfo.Arguments       = $"/query /tn \"\\GameTask\\{taskName}\"";
+                process.StartInfo.CreateNoWindow  = true;
                 process.StartInfo.UseShellExecute = false;
 
                 process.Start();
@@ -467,20 +500,70 @@ namespace GameTaskPlugin
         }
 
         // =====================================================
-        // RUN HELPERS (elevated via wscript runas)
+        // RUN PENDING TASKS
+        // Starts the elevated helper, then polls for the result
+        // file and shows a success/failure notification.
         // =====================================================
 
         private void RunPendingTasks()
         {
             try
             {
+                // Clear any previous result so we don't read a stale file
+                string resultFile = hiddenLauncherManager.ResultFile;
+                if (File.Exists(resultFile)) File.Delete(resultFile);
+
                 logger.Log("Requesting elevated task creation...");
+
                 Process.Start(new ProcessStartInfo
                 {
                     FileName        = "wscript.exe",
                     Arguments       = $"\"{hiddenLauncherManager.GetCreateLauncherPath()}\"",
                     Verb            = "runas",
                     UseShellExecute = true
+                });
+
+                // Poll for the result file in the background (up to 60 s)
+                Task.Run(() =>
+                {
+                    for (int i = 0; i < 120; i++)
+                    {
+                        Thread.Sleep(500);
+                        if (!File.Exists(resultFile)) continue;
+
+                        try
+                        {
+                            string content = File.ReadAllText(resultFile).Trim();
+                            // format: created=N|failed=M
+                            int created = 0, failed = 0;
+                            foreach (var part in content.Split('|'))
+                            {
+                                var kv = part.Split('=');
+                                if (kv.Length != 2) continue;
+                                if (kv[0] == "created") int.TryParse(kv[1], out created);
+                                if (kv[0] == "failed")  int.TryParse(kv[1], out failed);
+                            }
+
+                            logger.Log($"Task creation result: created={created} failed={failed}");
+
+                            if (failed == 0)
+                            {
+                                notificationManager.ShowInfo(
+                                    $"{created} task(s) created successfully.");
+                            }
+                            else
+                            {
+                                notificationManager.ShowError(
+                                    $"{created} task(s) created, {failed} failed. Check the data folder logs for details.");
+                            }
+
+                            // Remove the pending notification since tasks are now registered
+                            api.Notifications.Remove("GameTaskPending");
+                        }
+                        catch (Exception ex) { logger.Log($"ERROR reading result file: {ex.Message}"); }
+
+                        break;
+                    }
                 });
             }
             catch (Exception ex) { logger.Log($"ERROR running create helper: {ex.Message}"); }
@@ -558,10 +641,12 @@ namespace GameTaskPlugin
 
         public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
         {
+            int taggedCount = api.Database.Games.Count(HasGameTaskTag);
+
             yield return new MainMenuItem
             {
                 MenuSection = "@GameTask",
-                Description = "Repair All Tagged Games",
+                Description = $"Repair All Tagged Games ({taggedCount})",
                 Action      = _ => RepairAll()
             };
 
@@ -572,18 +657,50 @@ namespace GameTaskPlugin
                 Action      = _ => CleanOrphanTasks()
             };
 
+            // Quick-access toggles — useful in fullscreen mode where
+            // the native settings page (Settings → Plugins) is harder to reach
+            var s = settingsManager.Current;
+
             yield return new MainMenuItem
             {
                 MenuSection = "@GameTask|Settings",
-                Description = $"Bring Game to Foreground: {(settingsManager.Current.BringWindowToForeground ? "ON" : "OFF")}",
-                Action      = _ => ToggleBringToForeground()
+                Description = $"Bring Game to Foreground: {(s.BringWindowToForeground ? "ON" : "OFF")}",
+                Action      = _ =>
+                {
+                    s.BringWindowToForeground = !s.BringWindowToForeground;
+                    settingsManager.Save();
+                    api.Dialogs.ShowMessage(
+                        $"\"Bring game window to foreground\" is now {(s.BringWindowToForeground ? "ON" : "OFF")}.\n\nRun \"Repair All Tagged Games\" so the launchers are regenerated.",
+                        "GameTask – Settings");
+                }
             };
 
             yield return new MainMenuItem
             {
                 MenuSection = "@GameTask|Settings",
-                Description = $"Detect Orphan Tasks on Startup: {(settingsManager.Current.DetectOrphanTasks ? "ON" : "OFF")}",
-                Action      = _ => ToggleDetectOrphans()
+                Description = $"Detect Orphan Tasks on Startup: {(s.DetectOrphanTasks ? "ON" : "OFF")}",
+                Action      = _ =>
+                {
+                    s.DetectOrphanTasks = !s.DetectOrphanTasks;
+                    settingsManager.Save();
+                    api.Dialogs.ShowMessage(
+                        $"\"Detect orphan tasks on startup\" is now {(s.DetectOrphanTasks ? "ON" : "OFF")}.",
+                        "GameTask – Settings");
+                }
+            };
+
+            yield return new MainMenuItem
+            {
+                MenuSection = "@GameTask|Settings",
+                Description = $"Detect Corrupted Tasks on Startup: {(s.DetectCorruptedTasks ? "ON" : "OFF")}",
+                Action      = _ =>
+                {
+                    s.DetectCorruptedTasks = !s.DetectCorruptedTasks;
+                    settingsManager.Save();
+                    api.Dialogs.ShowMessage(
+                        $"\"Detect corrupted tasks on startup\" is now {(s.DetectCorruptedTasks ? "ON" : "OFF")}.",
+                        "GameTask – Settings");
+                }
             };
         }
     }

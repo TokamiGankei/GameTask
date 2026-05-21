@@ -2,15 +2,93 @@ using System;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json;
+using Playnite.SDK;
+using Playnite.SDK.Plugins;
 
 namespace GameTaskPlugin
 {
-    public class PluginSettings
+    // =========================================================
+    // MODEL — serialized to Config/Settings.json
+    // =========================================================
+    public class PluginSettings : ObservableObject
     {
-        public bool BringWindowToForeground { get; set; } = true;
-        public bool DetectOrphanTasks       { get; set; } = true;
+        private bool bringWindowToForeground = true;
+        private bool detectOrphanTasks       = true;
+        private bool detectCorruptedTasks    = true;
+
+        public bool BringWindowToForeground
+        {
+            get => bringWindowToForeground;
+            set => SetValue(ref bringWindowToForeground, value);
+        }
+
+        public bool DetectOrphanTasks
+        {
+            get => detectOrphanTasks;
+            set => SetValue(ref detectOrphanTasks, value);
+        }
+
+        public bool DetectCorruptedTasks
+        {
+            get => detectCorruptedTasks;
+            set => SetValue(ref detectCorruptedTasks, value);
+        }
     }
 
+    // =========================================================
+    // SETTINGS PROVIDER — implements ISettings for Playnite's
+    // native settings page (Settings → Plugins → GameTask)
+    // =========================================================
+    public class GameTaskSettings : ISettings
+    {
+        private readonly GameTaskPlugin   plugin;
+        private readonly SettingsManager  settingsManager;
+
+        // Playnite binds the view to this object
+        public PluginSettings Settings => settingsManager.Current;
+
+        // Snapshot taken when the settings page opens, used for Cancel
+        private PluginSettings snapshot;
+
+        public GameTaskSettings(GameTaskPlugin plugin, SettingsManager settingsManager)
+        {
+            this.plugin          = plugin;
+            this.settingsManager = settingsManager;
+        }
+
+        public void BeginEdit()
+        {
+            // Clone current values so we can restore on Cancel
+            snapshot = new PluginSettings
+            {
+                BringWindowToForeground = Settings.BringWindowToForeground,
+                DetectOrphanTasks       = Settings.DetectOrphanTasks,
+                DetectCorruptedTasks    = Settings.DetectCorruptedTasks
+            };
+        }
+
+        public void CancelEdit()
+        {
+            Settings.BringWindowToForeground = snapshot.BringWindowToForeground;
+            Settings.DetectOrphanTasks       = snapshot.DetectOrphanTasks;
+            Settings.DetectCorruptedTasks    = snapshot.DetectCorruptedTasks;
+        }
+
+        public void EndEdit()
+        {
+            settingsManager.Save();
+        }
+
+        public bool VerifySettings(out List<string> errors)
+        {
+            errors = new List<string>();
+            return true;
+        }
+    }
+
+    // =========================================================
+    // PERSISTENCE — loads / saves Settings.json
+    // =========================================================
     public class SettingsManager
     {
         private readonly Logger logger;
