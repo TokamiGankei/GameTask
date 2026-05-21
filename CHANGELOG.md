@@ -8,11 +8,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 ## [v1.2.1] — 2026-05-21
 
 ### Fixed
-- **Build failure due to missing `Newtonsoft.Json` and `PresentationCore` references in `GameTaskPlugin.csproj`
-- **Missing `using` directives in `PluginSettings.cs` (`System.Collections.Generic`, `Newtonsoft.Json`, `Playnite.SDK`, `Playnite.SDK.Plugins`)
-- **Incorrect `VerifySettings` signature — corrected to `out List<string> errors` as required by `ISettings`
-- **`SettingsView.xaml` not declared as `<Page>` in `.csproj`, preventing XAML compilation
-
+- Build failure due to missing `Newtonsoft.Json` and `PresentationCore` references in `GameTaskPlugin.csproj`
+- Missing `using` directives in `PluginSettings.cs` (`System.Collections.Generic`, `Newtonsoft.Json`, `Playnite.SDK`, `Playnite.SDK.Plugins`)
+- Incorrect `VerifySettings` signature — corrected to `out List<string> errors` as required by `ISettings`
+- `SettingsView.xaml` not declared as `<Page>` in `.csproj`, preventing XAML compilation
+- Missing `WindowsBase` reference in `GameTaskPlugin.csproj`, required by `SettingsView.xaml`
 ---
 
 ## [v1.2.0] — 2026-05-20
