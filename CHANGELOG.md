@@ -16,6 +16,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 - Switched project SDK to `Microsoft.NET.Sdk.WindowsDesktop` with `<UseWPF>true</UseWPF>` — required for XAML compilation and `InitializeComponent` generation
 - Plugin failing to load in Playnite due to `Newtonsoft.Json` version conflict — now uses the version bundled with Playnite instead of packaging its own
 - Removed `Newtonsoft.Json` dependency entirely — settings now use a simple INI format to avoid assembly version conflicts with Playnite's bundled libraries
+- VBScript syntax error `800A0401` when creating scheduled tasks — fixed quote escaping in `.vbs` launcher generation using `Chr(34)` instead of escaped double quotes
+- Game window not coming to foreground over Playnite fullscreen — replaced `AppActivate` with `SetForegroundWindow` + `AttachThreadInput` to bypass the Windows foreground lock; increased process wait timeout to 60 s for slow PCs
 ---
 
 ## [v1.2.0] — 2026-05-20
