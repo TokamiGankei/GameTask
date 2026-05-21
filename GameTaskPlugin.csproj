@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
 	<PropertyGroup>
 		<TargetFramework>net48</TargetFramework>
 		<LangVersion>latest</LangVersion>
+		<UseWPF>true</UseWPF>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -10,20 +11,10 @@
 		<PackageReference Include="Newtonsoft.Json" Version="13.*" />
 
 		<Reference Include="Microsoft.CSharp" />
-		<Reference Include="PresentationCore" />
-		<Reference Include="PresentationFramework" />
-		<Reference Include="WindowsBase" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<Folder Include="screenshots\" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<Page Include="SettingsView.xaml">
-			<Generator>MSBuild:Compile</Generator>
-			<SubType>Designer</SubType>
-		</Page>
 	</ItemGroup>
 
 </Project>
