@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net48</TargetFramework>
@@ -7,14 +7,22 @@
 
 	<ItemGroup>
 		<PackageReference Include="PlayniteSDK" Version="6.*" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.*" />
 
 		<Reference Include="Microsoft.CSharp" />
-
+		<Reference Include="PresentationCore" />
 		<Reference Include="PresentationFramework" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<Folder Include="screenshots\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Page Include="SettingsView.xaml">
+			<Generator>MSBuild:Compile</Generator>
+			<SubType>Designer</SubType>
+		</Page>
 	</ItemGroup>
 
 </Project>

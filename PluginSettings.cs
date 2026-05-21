@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
+
 using Newtonsoft.Json;
+
 using Playnite.SDK;
 using Playnite.SDK.Plugins;
 
@@ -41,13 +44,11 @@ namespace GameTaskPlugin
     // =========================================================
     public class GameTaskSettings : ISettings
     {
-        private readonly GameTaskPlugin   plugin;
-        private readonly SettingsManager  settingsManager;
+        private readonly GameTaskPlugin  plugin;
+        private readonly SettingsManager settingsManager;
 
-        // Playnite binds the view to this object
         public PluginSettings Settings => settingsManager.Current;
 
-        // Snapshot taken when the settings page opens, used for Cancel
         private PluginSettings snapshot;
 
         public GameTaskSettings(GameTaskPlugin plugin, SettingsManager settingsManager)
@@ -58,7 +59,6 @@ namespace GameTaskPlugin
 
         public void BeginEdit()
         {
-            // Clone current values so we can restore on Cancel
             snapshot = new PluginSettings
             {
                 BringWindowToForeground = Settings.BringWindowToForeground,
