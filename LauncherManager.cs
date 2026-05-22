@@ -42,54 +42,103 @@ param([string]$ExeName)
 
 Add-Type @'
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
-public class WinApi {
-    [DllImport(""user32.dll"")]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport(""user32.dll"")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport(""user32.dll"")]
-    public static extern bool IsIconic(IntPtr hWnd);
-    [DllImport(""user32.dll"")]
-    public static extern bool AllowSetForegroundWindow(int dwProcessId);
-    [DllImport(""user32.dll"")]
-    public static extern IntPtr GetForegroundWindow();
-    [DllImport(""user32.dll"")]
-    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-    [DllImport(""kernel32.dll"")]
-    public static extern uint GetCurrentThreadId();
-    [DllImport(""user32.dll"")]
-    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-}
-'@
+using System.Threading;
 
-function Invoke-SetForeground($hwnd, $procId) {
-    if ($hwnd -eq [IntPtr]::Zero) { return }
+public class FocusGuard {
+    delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType,
+        IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
-    if ([WinApi]::IsIconic($hwnd)) {
-        [WinApi]::ShowWindow($hwnd, 9) | Out-Null
+    [DllImport(""user32.dll"")] static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax,
+        IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc,
+        uint idProcess, uint idThread, uint dwFlags);
+    [DllImport(""user32.dll"")] static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+    [DllImport(""user32.dll"")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport(""user32.dll"")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport(""user32.dll"")] static extern bool IsIconic(IntPtr hWnd);
+    [DllImport(""user32.dll"")] static extern bool AllowSetForegroundWindow(int dwProcessId);
+    [DllImport(""user32.dll"")] static extern IntPtr GetForegroundWindow();
+    [DllImport(""user32.dll"")] static extern bool AttachThreadInput(uint a, uint b, bool c);
+    [DllImport(""kernel32.dll"")] static extern uint GetCurrentThreadId();
+    [DllImport(""user32.dll"")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport(""user32.dll"")] static extern void GetMessage(out MSG msg, IntPtr hWnd, uint min, uint max);
+    [DllImport(""user32.dll"")] static extern bool TranslateMessage(ref MSG msg);
+    [DllImport(""user32.dll"")] static extern IntPtr DispatchMessage(ref MSG msg);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct MSG { public IntPtr hwnd; public uint message; public IntPtr wParam;
+                 public IntPtr lParam; public uint time; public System.Drawing.Point pt; }
+
+    const uint EVENT_SYSTEM_FOREGROUND = 3;
+    const uint WINEVENT_OUTOFCONTEXT   = 0;
+
+    static IntPtr  _gameHwnd;
+    static int     _gamePid;
+    static IntPtr  _hook;
+    static bool    _done;
+
+    static void ForceForeground() {
+        var hwnd = _gameHwnd;
+        if (hwnd == IntPtr.Zero) return;
+
+        if (IsIconic(hwnd)) ShowWindow(hwnd, 9);
+
+        AllowSetForegroundWindow(_gamePid);
+
+        var fg      = GetForegroundWindow();
+        uint dummy  = 0;
+        var fgTid   = GetWindowThreadProcessId(fg, out dummy);
+        var myTid   = GetCurrentThreadId();
+
+        if (fgTid != 0 && fgTid != myTid) {
+            AttachThreadInput(myTid, fgTid, true);
+            SetForegroundWindow(hwnd);
+            ShowWindow(hwnd, 9);
+            AttachThreadInput(myTid, fgTid, false);
+        } else {
+            SetForegroundWindow(hwnd);
+        }
     }
 
-    [WinApi]::AllowSetForegroundWindow($procId) | Out-Null
+    static WinEventDelegate _delegate;
 
-    $fgHwnd     = [WinApi]::GetForegroundWindow()
-    $dummy      = 0
-    $fgThreadId = [WinApi]::GetWindowThreadProcessId($fgHwnd, [ref]$dummy)
-    $myThreadId = [WinApi]::GetCurrentThreadId()
+    static void OnForegroundChange(IntPtr hook, uint evt, IntPtr hwnd,
+        int obj, int child, uint thread, uint time) {
+        if (_done) return;
+        if (hwnd == _gameHwnd) return;  // game already in foreground — OK
+        // Something else stole focus — take it back immediately
+        ForceForeground();
+    }
 
-    if ($fgThreadId -ne 0 -and $fgThreadId -ne $myThreadId) {
-        [WinApi]::AttachThreadInput($myThreadId, $fgThreadId, $true)  | Out-Null
-        [WinApi]::SetForegroundWindow($hwnd) | Out-Null
-        [WinApi]::ShowWindow($hwnd, 9)       | Out-Null
-        [WinApi]::AttachThreadInput($myThreadId, $fgThreadId, $false) | Out-Null
-    } else {
-        [WinApi]::SetForegroundWindow($hwnd) | Out-Null
+    public static void Run(IntPtr gameHwnd, int gamePid, int guardSeconds) {
+        _gameHwnd = gameHwnd;
+        _gamePid  = gamePid;
+        _done     = false;
+
+        _delegate = new WinEventDelegate(OnForegroundChange);
+        _hook     = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
+                        IntPtr.Zero, _delegate, 0, 0, WINEVENT_OUTOFCONTEXT);
+
+        // Initial push
+        ForceForeground();
+
+        // Pump messages for guardSeconds — the hook fires during this loop
+        var end = DateTime.UtcNow.AddSeconds(guardSeconds);
+        MSG msg;
+        while (DateTime.UtcNow < end && !_done) {
+            Thread.Sleep(100);
+        }
+
+        _done = true;
+        UnhookWinEvent(_hook);
     }
 }
+'@ -ReferencedAssemblies 'System.Drawing'
 
 $target = [System.IO.Path]::GetFileNameWithoutExtension($ExeName)
 
-# Step 1 — wait up to 60 s for the game process to appear
+# Step 1 — wait up to 60 s for the game process
 $proc = $null
 for ($i = 0; $i -lt 120; $i++) {
     Start-Sleep -Milliseconds 500
@@ -101,7 +150,7 @@ for ($i = 0; $i -lt 120; $i++) {
 }
 if ($proc -eq $null) { exit }
 
-# Step 2 — wait up to 30 s for a window handle to appear
+# Step 2 — wait up to 30 s for a window handle
 $hwnd = [IntPtr]::Zero
 for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 500
@@ -113,26 +162,9 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 if ($hwnd -eq [IntPtr]::Zero) { exit }
 
-# Step 3 — aggressively reclaim focus for 20 seconds
-# Runs every 500 ms — if anything (splash, Task Scheduler, etc.)
-# steals the foreground, we immediately take it back.
-# After 20 s the game is assumed to be stable in the foreground.
-for ($i = 0; $i -lt 40; $i++) {
-    Start-Sleep -Milliseconds 500
-
-    $proc.Refresh()
-    if ($proc.HasExited) { break }
-
-    # Refresh window handle — it can change as game initializes
-    if ($proc.MainWindowHandle -ne [IntPtr]::Zero) {
-        $hwnd = $proc.MainWindowHandle
-    }
-
-    $fg = [WinApi]::GetForegroundWindow()
-    if ($fg -ne $hwnd) {
-        Invoke-SetForeground $hwnd $proc.Id
-    }
-}
+# Step 3 — install foreground event hook and guard for 20 seconds.
+# Any window that steals focus triggers an immediate reclaim.
+[FocusGuard]::Run($hwnd, $proc.Id, 20)
 ";
             File.WriteAllText(focusPs1Path, script, Encoding.UTF8);
             logger.Log("FocusGame.ps1 written.");
