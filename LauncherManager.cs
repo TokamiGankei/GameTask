@@ -63,65 +63,75 @@ public class WinApi {
 }
 '@
 
+function Invoke-SetForeground($hwnd, $procId) {
+    if ($hwnd -eq [IntPtr]::Zero) { return }
+
+    if ([WinApi]::IsIconic($hwnd)) {
+        [WinApi]::ShowWindow($hwnd, 9) | Out-Null
+    }
+
+    [WinApi]::AllowSetForegroundWindow($procId) | Out-Null
+
+    $fgHwnd     = [WinApi]::GetForegroundWindow()
+    $dummy      = 0
+    $fgThreadId = [WinApi]::GetWindowThreadProcessId($fgHwnd, [ref]$dummy)
+    $myThreadId = [WinApi]::GetCurrentThreadId()
+
+    if ($fgThreadId -ne 0 -and $fgThreadId -ne $myThreadId) {
+        [WinApi]::AttachThreadInput($myThreadId, $fgThreadId, $true)  | Out-Null
+        [WinApi]::SetForegroundWindow($hwnd) | Out-Null
+        [WinApi]::ShowWindow($hwnd, 9)       | Out-Null
+        [WinApi]::AttachThreadInput($myThreadId, $fgThreadId, $false) | Out-Null
+    } else {
+        [WinApi]::SetForegroundWindow($hwnd) | Out-Null
+    }
+}
+
 $target = [System.IO.Path]::GetFileNameWithoutExtension($ExeName)
 
-# Wait up to 60 s for the process to appear (some games are slow to start)
+# Step 1 — wait up to 60 s for the game process to appear
 $proc = $null
 for ($i = 0; $i -lt 120; $i++) {
     Start-Sleep -Milliseconds 500
     $candidates = Get-Process -Name $target -ErrorAction SilentlyContinue
     if ($candidates) {
-        # Pick the most recently started instance
         $proc = $candidates | Sort-Object StartTime -Descending | Select-Object -First 1
         break
     }
 }
-
 if ($proc -eq $null) { exit }
 
-# Wait up to 15 more seconds for the main window handle to appear
-# Some games show a splash screen process first — keep waiting
-for ($i = 0; $i -lt 30; $i++) {
+# Step 2 — wait up to 30 s for a window handle to appear
+$hwnd = [IntPtr]::Zero
+for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 500
     $proc.Refresh()
-    if ($proc.MainWindowHandle -ne [IntPtr]::Zero) { break }
+    if ($proc.MainWindowHandle -ne [IntPtr]::Zero) {
+        $hwnd = $proc.MainWindowHandle
+        break
+    }
 }
-
-if ($proc.MainWindowHandle -eq [IntPtr]::Zero) { exit }
-
-# Extra delay — let the game finish rendering its first frame
-# before we try to bring it forward (avoids focus being returned to Playnite)
-Start-Sleep -Milliseconds 1500
-
-$proc.Refresh()
-$hwnd = $proc.MainWindowHandle
 if ($hwnd -eq [IntPtr]::Zero) { exit }
 
-# Restore if minimized
-if ([WinApi]::IsIconic($hwnd)) {
-    [WinApi]::ShowWindow($hwnd, 9) | Out-Null  # SW_RESTORE
+# Step 3 — aggressively reclaim focus for 20 seconds
+# Runs every 500 ms — if anything (splash, Task Scheduler, etc.)
+# steals the foreground, we immediately take it back.
+# After 20 s the game is assumed to be stable in the foreground.
+for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 500
-}
 
-# Windows blocks SetForegroundWindow when another window owns the foreground lock.
-# Workaround: attach our thread input to the foreground window's thread,
-# call SetForegroundWindow, then detach. This bypasses the lock reliably.
-$fgHwnd      = [WinApi]::GetForegroundWindow()
-$fgThreadId  = 0
-$fgProcId    = 0
-$dummy       = 0
-$fgThreadId  = [WinApi]::GetWindowThreadProcessId($fgHwnd, [ref]$dummy)
-$myThreadId  = [WinApi]::GetCurrentThreadId()
+    $proc.Refresh()
+    if ($proc.HasExited) { break }
 
-[WinApi]::AllowSetForegroundWindow($proc.Id) | Out-Null
+    # Refresh window handle — it can change as game initializes
+    if ($proc.MainWindowHandle -ne [IntPtr]::Zero) {
+        $hwnd = $proc.MainWindowHandle
+    }
 
-if ($fgThreadId -ne 0 -and $fgThreadId -ne $myThreadId) {
-    [WinApi]::AttachThreadInput($myThreadId, $fgThreadId, $true) | Out-Null
-    [WinApi]::SetForegroundWindow($hwnd) | Out-Null
-    [WinApi]::ShowWindow($hwnd, 9) | Out-Null
-    [WinApi]::AttachThreadInput($myThreadId, $fgThreadId, $false) | Out-Null
-} else {
-    [WinApi]::SetForegroundWindow($hwnd) | Out-Null
+    $fg = [WinApi]::GetForegroundWindow()
+    if ($fg -ne $hwnd) {
+        Invoke-SetForeground $hwnd $proc.Id
+    }
 }
 ";
             File.WriteAllText(focusPs1Path, script, Encoding.UTF8);

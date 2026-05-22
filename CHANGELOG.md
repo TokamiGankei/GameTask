@@ -18,6 +18,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 - Removed `Newtonsoft.Json` dependency entirely — settings now use a simple INI format to avoid assembly version conflicts with Playnite's bundled libraries
 - VBScript syntax error `800A0401` when creating scheduled tasks — fixed quote escaping in `.vbs` launcher generation using `Chr(34)` instead of escaped double quotes
 - Game window not coming to foreground over Playnite fullscreen — replaced `AppActivate` with `SetForegroundWindow` + `AttachThreadInput` to bypass the Windows foreground lock; increased process wait timeout to 60 s for slow PCs
+- Game window losing focus to splash screen plugin or Task Scheduler after launch — script now monitors and reclaims foreground every 500 ms for 20 seconds after the game opens
 ---
 
 ## [v1.2.0] — 2026-05-20
