@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
+## [v1.2.2] — 2026-05-21
+
+### Fixed
+- Game window losing focus to splash screen plugin, Task Scheduler, or Explorer when launched via scheduled task — replaced foreground polling with `SetWinEventHook` (`EVENT_SYSTEM_FOREGROUND`) for instant reclaim via `AttachThreadInput`; guard active for 20 seconds after game window appears (reported by @bobokaka)
+
+---
+
 ## [v1.2.1] — 2026-05-21
 
 ### Fixed
@@ -17,8 +24,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 - Plugin failing to load in Playnite due to `Newtonsoft.Json` version conflict — now uses the version bundled with Playnite instead of packaging its own
 - Removed `Newtonsoft.Json` dependency entirely — settings now use a simple INI format to avoid assembly version conflicts with Playnite's bundled libraries
 - VBScript syntax error `800A0401` when creating scheduled tasks — fixed quote escaping in `.vbs` launcher generation using `Chr(34)` instead of escaped double quotes
-- Game window not coming to foreground over Playnite fullscreen — replaced `AppActivate` with `SetForegroundWindow` + `AttachThreadInput` to bypass the Windows foreground lock; increased process wait timeout to 60 s for slow PCs
-- Game window losing focus to splash screen plugin or Task Scheduler after launch — script now monitors and reclaims foreground every 500 ms for 20 seconds after the game opens
+
 ---
 
 ## [v1.2.0] — 2026-05-20
@@ -44,9 +50,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 - **Repair All Tagged Games** — new option in Extensions → GameTask to run Repair on every tagged game at once
 - **Settings toggles** — "Bring Game to Foreground" and "Detect Orphan Tasks on Startup" toggles in Extensions → GameTask → Settings
 - **`PluginSettings.cs`** — new file persisting settings to `Config/Settings.json`
-
-### Fixed
-- **Game window opening behind other windows** — the launcher `.vbs` now uses WMI to find the game process by PID (most recently created matching process) and calls `AppActivate` with the exact PID, preventing focus from going to the wrong window when multiple processes share the same executable name
 
 ---
 

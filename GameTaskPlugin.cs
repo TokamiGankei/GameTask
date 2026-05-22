@@ -36,6 +36,8 @@ namespace GameTaskPlugin
         private readonly TrackerManager        trackerManager;
         private readonly PathManager           pathManager;
 
+        private FocusGuard activeFocusGuard;
+
         public GameTaskPlugin(IPlayniteAPI api) : base(api)
         {
             this.api = api;
@@ -84,6 +86,52 @@ namespace GameTaskPlugin
                 CheckForCorruptedTasks();
 
             notificationManager.ShowPendingNotification();
+        }
+
+        public override void OnGameStarted(OnGameStartedEventArgs args)
+        {
+            base.OnGameStarted(args);
+
+            if (!HasGameTaskTag(args.Game)) return;
+            if (!settingsManager.Current.BringWindowToForeground) return;
+
+            // Resolve the exe name for this game
+            string exeName = ResolveExeNameForGame(args.Game);
+            if (string.IsNullOrWhiteSpace(exeName)) return;
+
+            // Stop any previous guard (e.g. if two games launched somehow)
+            activeFocusGuard?.Stop();
+            activeFocusGuard?.Dispose();
+
+            activeFocusGuard = new FocusGuard(logger, guardSeconds: 20);
+            activeFocusGuard.StartAsync(exeName);
+
+            logger.Log($"FocusGuard started for: {args.Game.Name} ({exeName})");
+        }
+
+        public override void OnGameStopped(OnGameStoppedEventArgs args)
+        {
+            base.OnGameStopped(args);
+            activeFocusGuard?.Stop();
+            activeFocusGuard?.Dispose();
+            activeFocusGuard = null;
+        }
+
+        private string ResolveExeNameForGame(Game game)
+        {
+            string customExe = pathManager.GetCustomPath(game);
+            if (!string.IsNullOrWhiteSpace(customExe))
+                return System.IO.Path.GetFileName(customExe);
+
+            var action = game.GameActions?.FirstOrDefault(a =>
+                a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path));
+
+            if (action == null) return null;
+
+            string resolved = taskManager.ResolveExecutable(game, action);
+            return string.IsNullOrWhiteSpace(resolved)
+                ? null
+                : System.IO.Path.GetFileName(resolved);
         }
 
         // =====================================================
