@@ -327,13 +327,33 @@ namespace GameTaskPlugin
 
         private void RepairGameTask(Game game)
         {
-            launcherManager.CreateOrUpdateLauncher(game);
+            string resolvedExe = ResolveExePathForGame(game);
+            launcherManager.CreateOrUpdateLauncher(game, resolvedExe);
             actionManager.CreateOrUpdatePlayAction(game, api);
 
             if (!TaskExists(game))
                 taskManager.AddPendingTask(game, ActionName);
 
             ValidateExecutable(game);
+        }
+
+        /// <summary>
+        /// Returns the fully resolved .exe path for the game,
+        /// checking custom path first, then game actions.
+        /// </summary>
+        private string ResolveExePathForGame(Game game)
+        {
+            string customExe = pathManager.GetCustomPath(game);
+            if (!string.IsNullOrWhiteSpace(customExe) && File.Exists(customExe))
+                return customExe;
+
+            var action = game.GameActions?.FirstOrDefault(a =>
+                a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path));
+
+            if (action == null) return null;
+
+            string resolved = taskManager.ResolveExecutable(game, action);
+            return File.Exists(resolved) ? resolved : null;
         }
 
         // =====================================================
@@ -384,7 +404,7 @@ namespace GameTaskPlugin
             taskManager.RemovePendingEntry(game);
             taskManager.AddPendingTask(game, ActionName, customExe);
 
-            launcherManager.CreateOrUpdateLauncher(game);
+            launcherManager.CreateOrUpdateLauncher(game, customExe);
             actionManager.CreateOrUpdatePlayAction(game, api);
 
             notificationManager.ShowPendingNotification();
@@ -500,7 +520,8 @@ namespace GameTaskPlugin
                 taskManager.RemovePendingEntry(game);
                 taskManager.AddDeleteTask(game);
 
-                launcherManager.CreateOrUpdateLauncher(game);
+                string resolvedExe = ResolveExePathForGame(game);
+                launcherManager.CreateOrUpdateLauncher(game, resolvedExe);
                 actionManager.CreateOrUpdatePlayAction(game, api);
                 taskManager.AddPendingTask(game, ActionName);
 
