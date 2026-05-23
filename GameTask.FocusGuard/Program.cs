@@ -1,16 +1,9 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-/// <summary>
-/// GameTask.FocusGuard.exe <ExeName.exe> [guardSeconds]
-///
-/// Waits for the given process to appear, then aggressively keeps
-/// its window in the foreground for guardSeconds (default 20).
-/// Called directly by the game launcher .vbs right after schtasks /run.
-/// Runs as a hidden WinExe — no console window.
-/// </summary>
 class Program
 {
     #region Win32
@@ -54,37 +47,63 @@ class Program
 
     const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     const uint WINEVENT_OUTOFCONTEXT   = 0x0000;
-    const uint WM_USER_STOP            = 0x0400 + 1;
+    const uint WM_USER_STOP            = 0x0401;
 
     #endregion
 
     static IntPtr gameHwnd = IntPtr.Zero;
     static int    gamePid  = 0;
+    static string logFile;
+
+    static void Log(string msg)
+    {
+        try { File.AppendAllText(logFile, $"[{DateTime.Now:HH:mm:ss}] {msg}\r\n"); } catch { }
+    }
 
     [STAThread]
     static void Main(string[] args)
     {
         if (args.Length == 0) return;
 
-        string exeName     = System.IO.Path.GetFileNameWithoutExtension(args[0]);
-        int    guardSecs   = args.Length > 1 && int.TryParse(args[1], out int s) ? s : 20;
+        string exeName   = Path.GetFileNameWithoutExtension(args[0]);
+        int    guardSecs = args.Length > 1 && int.TryParse(args[1], out int s) ? s : 20;
+
+        // Log path passed as 3rd argument (plugin data folder\Logs\FocusGuard.log)
+        // Falls back to exe directory if not provided
+        if (args.Length > 2 && !string.IsNullOrWhiteSpace(args[2]))
+        {
+            logFile = args[2];
+            try { Directory.CreateDirectory(Path.GetDirectoryName(logFile)); } catch { }
+        }
+        else
+        {
+            string dir = Path.GetDirectoryName(
+                System.Reflection.Assembly.GetExecutingAssembly().Location);
+            logFile = Path.Combine(dir, "FocusGuard.log");
+        }
+
+        Log($"=== Started. exeName={exeName} guardSecs={guardSecs} ===");
 
         // Step 1 — wait up to 60 s for the process
         Process proc = WaitForProcess(exeName, 60_000);
-        if (proc == null) return;
+        if (proc == null) { Log("Process not found within timeout."); return; }
 
         gamePid = proc.Id;
+        Log($"Process found. PID={gamePid}");
 
         // Step 2 — wait up to 30 s for a window handle
         gameHwnd = WaitForWindow(proc, 30_000);
-        if (gameHwnd == IntPtr.Zero) return;
+        if (gameHwnd == IntPtr.Zero) { Log("Window handle not found within timeout."); return; }
+
+        Log($"Window found. HWND={gameHwnd}");
 
         // Step 3 — install hook + message pump
         uint myTid = GetCurrentThreadId();
 
         WinEventProc hookDelegate = (hk, evt, hwnd, obj, child, thr, time) =>
         {
-            if (hwnd == gameHwnd) return;
+            if (hwnd == gameHwnd) { Log($"Game already in foreground."); return; }
+            Log($"Foreground stolen by HWND={hwnd} — reclaiming...");
             ForceForeground();
         };
 
@@ -92,15 +111,17 @@ class Program
             EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
             IntPtr.Zero, hookDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
 
+        Log($"Hook installed. Guarding for {guardSecs}s...");
+
         // Initial push
         ForceForeground();
 
         // Stop after guardSecs
-        var timer = new System.Threading.Timer(_ =>
+        var timer = new Timer(_ =>
             PostThreadMessage(myTid, WM_USER_STOP, IntPtr.Zero, IntPtr.Zero),
             null, guardSecs * 1000, Timeout.Infinite);
 
-        // Message pump — required for hook to fire
+        // Message pump
         MSG msg;
         while (GetMessage(out msg, IntPtr.Zero, 0, 0))
         {
@@ -111,6 +132,7 @@ class Program
 
         timer.Dispose();
         UnhookWinEvent(hook);
+        Log("=== Stopped. ===");
     }
 
     static void ForceForeground()
@@ -122,21 +144,25 @@ class Program
 
         AllowSetForegroundWindow(gamePid);
 
-        var    fg     = GetForegroundWindow();
-        uint   dummy  = 0;
-        var    fgTid  = GetWindowThreadProcessId(fg, out dummy);
-        var    myTid  = GetCurrentThreadId();
+        var    fg    = GetForegroundWindow();
+        uint   dummy = 0;
+        var    fgTid = GetWindowThreadProcessId(fg, out dummy);
+        var    myTid = GetCurrentThreadId();
+
+        Log($"ForceForeground: fg=0x{fg:X} fgTid={fgTid} myTid={myTid}");
 
         if (fgTid != 0 && fgTid != myTid)
         {
             AttachThreadInput(myTid, fgTid, true);
-            SetForegroundWindow(hwnd);
+            bool r1 = SetForegroundWindow(hwnd);
             ShowWindow(hwnd, 9);
             AttachThreadInput(myTid, fgTid, false);
+            Log($"SetForegroundWindow (attached) result={r1}");
         }
         else
         {
-            SetForegroundWindow(hwnd);
+            bool r1 = SetForegroundWindow(hwnd);
+            Log($"SetForegroundWindow result={r1}");
         }
     }
 
@@ -166,7 +192,10 @@ class Program
             elapsed += 500;
             try { proc.Refresh(); } catch { return IntPtr.Zero; }
             if (proc.MainWindowHandle != IntPtr.Zero)
+            {
+                Log($"Window appeared after {elapsed}ms");
                 return proc.MainWindowHandle;
+            }
         }
         return IntPtr.Zero;
     }
