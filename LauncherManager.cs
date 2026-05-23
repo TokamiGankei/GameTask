@@ -57,7 +57,7 @@ namespace GameTaskPlugin
             {
                 content +=
                     $"shell.Run Chr(34) & \"{focusGuardExePath}\" & Chr(34) & " +
-                    $"\" \\\"{exeFileName}\\\" 20\", 0, False\r\n";
+                    $"\" \" & Chr(34) & \"{exeFileName}\" & Chr(34) & \" 20\", 0, False\r\n";
             }
 
             File.WriteAllText(launcherPath, content, Encoding.ASCII);
