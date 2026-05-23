@@ -19,8 +19,11 @@ jobs:
           (Get-Content extension.yaml) -replace '^Version:.*', "Version: $version" |
           Set-Content extension.yaml
 
-      - name: Compilar projeto
+      - name: Compilar plugin principal
         run: dotnet build GameTaskPlugin.csproj -c Release
+
+      - name: Compilar FocusGuard.exe
+        run: dotnet build GameTask.FocusGuard/GameTask.FocusGuard.csproj -c Release
 
       - name: Criar o .pext
         id: pext
@@ -30,6 +33,7 @@ jobs:
 
           Compress-Archive -Force -Path @(
             "bin\Release\net48\GameTaskPlugin.dll",
+            "GameTask.FocusGuard\bin\Release\net48\GameTask.FocusGuard.exe",
             "extension.yaml",
             "icon.png"
           ) -DestinationPath "tmp.zip"
@@ -43,7 +47,6 @@ jobs:
           $tag     = "${{ github.ref_name }}"
           $content = Get-Content CHANGELOG.md -Raw
 
-          # Captura o bloco entre o cabeçalho da tag atual e o próximo cabeçalho ## 
           $pattern = "(?s)##\s*\[$tag\][^\n]*\n(.+?)(?=\n## \[|$)"
           $match   = [regex]::Match($content, $pattern)
 
@@ -53,7 +56,6 @@ jobs:
             $notes = "See CHANGELOG.md for details."
           }
 
-          # Salva em arquivo para evitar problemas com caracteres especiais
           Set-Content -Path "release_notes.md" -Value $notes -Encoding UTF8
           echo "NOTES_FILE=release_notes.md" >> $env:GITHUB_OUTPUT
 

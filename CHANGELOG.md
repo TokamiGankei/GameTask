@@ -4,11 +4,10 @@ All notable changes to GameTask are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
-
-## [v1.2.2] — 2026-05-21
+## [v1.2.2] — 2026-05-22
 
 ### Fixed
-- Game window losing focus to splash screen plugin, Task Scheduler, or Explorer when launched via scheduled task — replaced foreground polling with `SetWinEventHook` (`EVENT_SYSTEM_FOREGROUND`) for instant reclaim via `AttachThreadInput`; guard active for 20 seconds after game window appears (reported by @bobokaka)
+- Game window losing focus to splash screen, Task Scheduler or Explorer after launch — migrated focus management from PowerShell to a dedicated C# `FocusGuard` class running on an STA thread with a proper Win32 message pump; `SetWinEventHook` now fires instantly when any window steals focus and reclaims it via `AttachThreadInput` (reported by @bobokaka)
 
 ---
 
