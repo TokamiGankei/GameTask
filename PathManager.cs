@@ -215,21 +215,41 @@ namespace GameTaskPlugin
                     return false;
                 }
 
-                if (!File.Exists(dialog.FileName))
+                string selected = dialog.FileName;
+
+                // Validate that the selected file is actually a .exe
+                // The Windows file dialog can show .lnk shortcuts without
+                // their extension, which would cause FocusGuard to watch
+                // for a process that never starts.
+                if (!selected.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 {
                     logger.Log(
-                        $"Selected executable does not exist: {dialog.FileName}");
+                        $"Selected file is not an executable: {selected}");
+
+                    System.Windows.MessageBox.Show(
+                        $"The selected file is not an executable (.exe):\n{selected}\n\nPlease select the actual game executable, not a shortcut.",
+                        "GameTask — Invalid Selection",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+
+                    return false;
+                }
+
+                if (!File.Exists(selected))
+                {
+                    logger.Log(
+                        $"Selected executable does not exist: {selected}");
 
                     return false;
                 }
 
                 customPaths[game.Id.ToString()] =
-                    dialog.FileName;
+                    selected;
 
                 SaveCustomPaths();
 
                 logger.Log(
-                    $"Custom executable selected: {game.Name} -> {dialog.FileName}");
+                    $"Custom executable selected: {game.Name} -> {selected}");
 
                 return true;
             }

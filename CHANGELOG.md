@@ -7,7 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 ## [v1.2.2] — 2026-05-22
 
 ### Fixed
-- Game window losing focus to splash screen, Task Scheduler or Explorer after launch — migrated focus management from PowerShell to a dedicated C# `FocusGuard` class running on an STA thread with a proper Win32 message pump; `SetWinEventHook` now fires instantly when any window steals focus and reclaims it via `AttachThreadInput` (reported by @bobokaka)
+- Game window losing focus to Playnite fullscreen when splash screen closes — replaced in-process focus logic with a standalone `GameTask.FocusGuard.exe` launched directly by the `.vbs` launcher immediately after the scheduled task fires, before Playnite has a chance to reclaim the foreground (reported by @bobokaka)
 
 ---
 
