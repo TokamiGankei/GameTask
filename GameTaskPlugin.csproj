@@ -8,12 +8,17 @@
 
 	<ItemGroup>
 		<PackageReference Include="PlayniteSDK" Version="6.*" />
-
 		<Reference Include="Microsoft.CSharp" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<Folder Include="screenshots\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Exclude standalone FocusGuard project from this build -->
+		<Compile Remove="GameTask.FocusGuard\**" />
+		<None Remove="GameTask.FocusGuard\**" />
 	</ItemGroup>
 
 </Project>
