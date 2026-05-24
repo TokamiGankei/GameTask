@@ -36,7 +36,9 @@ namespace GameTaskPlugin
         private readonly TrackerManager        trackerManager;
         private readonly PathManager           pathManager;
 
-        private FocusGuard activeFocusGuard;
+        // Cooldown: tracks last launch time to prevent double-launch
+        private DateTime lastLaunchTime = DateTime.MinValue;
+        private const int LaunchCooldownMs = 3000;
 
         public GameTaskPlugin(IPlayniteAPI api) : base(api)
         {
@@ -86,52 +88,6 @@ namespace GameTaskPlugin
                 CheckForCorruptedTasks();
 
             notificationManager.ShowPendingNotification();
-        }
-
-        public override void OnGameStarted(OnGameStartedEventArgs args)
-        {
-            base.OnGameStarted(args);
-
-            if (!HasGameTaskTag(args.Game)) return;
-            if (!settingsManager.Current.BringWindowToForeground) return;
-
-            // Resolve the exe name for this game
-            string exeName = ResolveExeNameForGame(args.Game);
-            if (string.IsNullOrWhiteSpace(exeName)) return;
-
-            // Stop any previous guard (e.g. if two games launched somehow)
-            activeFocusGuard?.Stop();
-            activeFocusGuard?.Dispose();
-
-            activeFocusGuard = new FocusGuard(logger, guardSeconds: 20);
-            activeFocusGuard.StartAsync(exeName);
-
-            logger.Log($"FocusGuard started for: {args.Game.Name} ({exeName})");
-        }
-
-        public override void OnGameStopped(OnGameStoppedEventArgs args)
-        {
-            base.OnGameStopped(args);
-            activeFocusGuard?.Stop();
-            activeFocusGuard?.Dispose();
-            activeFocusGuard = null;
-        }
-
-        private string ResolveExeNameForGame(Game game)
-        {
-            string customExe = pathManager.GetCustomPath(game);
-            if (!string.IsNullOrWhiteSpace(customExe))
-                return System.IO.Path.GetFileName(customExe);
-
-            var action = game.GameActions?.FirstOrDefault(a =>
-                a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path));
-
-            if (action == null) return null;
-
-            string resolved = taskManager.ResolveExecutable(game, action);
-            return string.IsNullOrWhiteSpace(resolved)
-                ? null
-                : System.IO.Path.GetFileName(resolved);
         }
 
         // =====================================================
@@ -189,14 +145,9 @@ namespace GameTaskPlugin
                     }
                 }
 
-                if (orphans.Count == 0)
-                {
-                    logger.Log("Orphan check: none found.");
-                    return;
-                }
+                if (orphans.Count == 0) { logger.Log("Orphan check: none found."); return; }
 
                 logger.Log($"Orphan check: {orphans.Count} orphan(s) found.");
-
                 api.Notifications.Add(new NotificationMessage(
                     "GameTaskOrphans",
                     $"GameTask: {orphans.Count} orphan task(s) found in Task Scheduler. Click to clean up.",
@@ -208,8 +159,6 @@ namespace GameTaskPlugin
 
         // =====================================================
         // CORRUPTED TASK DETECTION
-        // A task is corrupted when its registered .exe no longer
-        // exists on disk (game moved, uninstalled, etc.).
         // =====================================================
 
         private void CheckForCorruptedTasks()
@@ -221,49 +170,113 @@ namespace GameTaskPlugin
 
                 foreach (var game in taggedGames)
                 {
-                    // 1. Custom path takes priority
                     string customExe = pathManager.GetCustomPath(game);
                     if (!string.IsNullOrWhiteSpace(customExe))
                     {
-                        if (!File.Exists(customExe))
-                        {
-                            logger.Log($"Corrupted (custom exe missing): {game.Name} -> {customExe}");
-                            corrupted.Add(game);
-                        }
+                        if (!File.Exists(customExe)) corrupted.Add(game);
                         continue;
                     }
 
-                    // 2. Resolve via game actions
                     var action = game.GameActions?.FirstOrDefault(a =>
                         a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path));
 
                     if (action == null) continue;
 
                     string exePath = taskManager.ResolveExecutable(game, action);
-
                     if (!string.IsNullOrWhiteSpace(exePath) && !File.Exists(exePath))
-                    {
-                        logger.Log($"Corrupted (exe missing): {game.Name} -> {exePath}");
                         corrupted.Add(game);
-                    }
                 }
 
-                if (corrupted.Count == 0)
-                {
-                    logger.Log("Corrupted task check: none found.");
-                    return;
-                }
+                if (corrupted.Count == 0) { logger.Log("Corrupted task check: none found."); return; }
 
                 logger.Log($"Corrupted task check: {corrupted.Count} found.");
-
                 foreach (var game in corrupted)
-                {
-                    notificationManager.ShowExecutableFixNotification(
-                        game,
-                        () => FixExecutablePath(game));
-                }
+                    notificationManager.ShowExecutableFixNotification(game, () => FixExecutablePath(game));
             }
             catch (Exception ex) { logger.Log($"ERROR in corrupted task check: {ex.Message}"); }
+        }
+
+        // =====================================================
+        // UNKNOWN EXE DETECTION
+        // Games tagged with GameTask but whose exe can't be
+        // resolved — FocusGuard won't work for these games.
+        // =====================================================
+
+        private void CheckForUnknownExecutables()
+        {
+            var unknown = api.Database.Games
+                .Where(HasGameTaskTag)
+                .Where(g => string.IsNullOrWhiteSpace(ResolveExePathForGame(g)))
+                .ToList();
+
+            if (unknown.Count == 0)
+            {
+                api.Dialogs.ShowMessage("All tagged games have a detected executable.", "GameTask");
+                return;
+            }
+
+            logger.Log($"Unknown exe check: {unknown.Count} game(s) need attention.");
+
+            api.Notifications.Add(new NotificationMessage(
+                "GameTaskUnknownExe",
+                $"GameTask: {unknown.Count} game(s) have no detected executable. Click to fix them.",
+                NotificationType.Info,
+                () => FixAllUnknownExecutables()));
+        }
+
+        // =====================================================
+        // FIX ALL UNKNOWN EXECUTABLES
+        // =====================================================
+
+        private void FixAllUnknownExecutables()
+        {
+            var unknown = api.Database.Games
+                .Where(HasGameTaskTag)
+                .Where(g => string.IsNullOrWhiteSpace(ResolveExePathForGame(g)))
+                .ToList();
+
+            if (unknown.Count == 0)
+            {
+                api.Dialogs.ShowMessage("All tagged games have a detected executable.", "GameTask");
+                return;
+            }
+
+            int fixed_count = 0;
+
+            foreach (var game in unknown)
+            {
+                var result = api.Dialogs.ShowMessage(
+                    $"Game \"{game.Name}\" has no detected executable.\n\nDo you want to select it now?",
+                    "GameTask — Fix Executable",
+                    System.Windows.MessageBoxButton.YesNoCancel);
+
+                if (result == System.Windows.MessageBoxResult.Cancel) break;
+                if (result == System.Windows.MessageBoxResult.No) continue;
+
+                bool fixed_path = pathManager.PromptForExecutable(game);
+                if (!fixed_path) continue;
+
+                fixed_count++;
+                string customExe = pathManager.GetCustomPath(game);
+
+                taskManager.RemovePendingEntry(game);
+                taskManager.AddPendingTask(game, ActionName, customExe);
+                launcherManager.CreateOrUpdateLauncher(game, customExe);
+                actionManager.CreateOrUpdatePlayAction(game, api);
+                notificationManager.RemoveExecutableFixNotification(game);
+
+                logger.Log($"Executable fixed via Fix All: {game.Name} -> {customExe}");
+            }
+
+            api.Notifications.Remove("GameTaskUnknownExe");
+
+            if (fixed_count > 0)
+            {
+                notificationManager.ShowPendingNotification();
+                api.Dialogs.ShowMessage(
+                    $"{fixed_count} executable(s) configured.\n\nClick the notification or use \"Create Pending Tasks\" to register the Windows tasks.",
+                    "GameTask");
+            }
         }
 
         // =====================================================
@@ -337,10 +350,10 @@ namespace GameTaskPlugin
             ValidateExecutable(game);
         }
 
-        /// <summary>
-        /// Returns the fully resolved .exe path for the game,
-        /// checking custom path first, then game actions.
-        /// </summary>
+        // =====================================================
+        // RESOLVE EXE PATH
+        // =====================================================
+
         private string ResolveExePathForGame(Game game)
         {
             string customExe = pathManager.GetCustomPath(game);
@@ -354,6 +367,12 @@ namespace GameTaskPlugin
 
             string resolved = taskManager.ResolveExecutable(game, action);
             return File.Exists(resolved) ? resolved : null;
+        }
+
+        private string ResolveExeNameForGame(Game game)
+        {
+            string path = ResolveExePathForGame(game);
+            return string.IsNullOrWhiteSpace(path) ? null : Path.GetFileName(path);
         }
 
         // =====================================================
@@ -570,15 +589,21 @@ namespace GameTaskPlugin
 
         // =====================================================
         // RUN PENDING TASKS
-        // Starts the elevated helper, then polls for the result
-        // file and shows a success/failure notification.
         // =====================================================
 
         private void RunPendingTasks()
         {
+            // Cooldown — prevent double-launch within 3 seconds
+            var now = DateTime.UtcNow;
+            if ((now - lastLaunchTime).TotalMilliseconds < LaunchCooldownMs)
+            {
+                logger.Log("RunPendingTasks skipped — cooldown active.");
+                return;
+            }
+            lastLaunchTime = now;
+
             try
             {
-                // Clear any previous result so we don't read a stale file
                 string resultFile = hiddenLauncherManager.ResultFile;
                 if (File.Exists(resultFile)) File.Delete(resultFile);
 
@@ -592,7 +617,7 @@ namespace GameTaskPlugin
                     UseShellExecute = true
                 });
 
-                // Poll for the result file in the background (up to 60 s)
+                // Poll for result file in background (up to 60 s)
                 Task.Run(() =>
                 {
                     for (int i = 0; i < 120; i++)
@@ -603,7 +628,6 @@ namespace GameTaskPlugin
                         try
                         {
                             string content = File.ReadAllText(resultFile).Trim();
-                            // format: created=N|failed=M
                             int created = 0, failed = 0;
                             foreach (var part in content.Split('|'))
                             {
@@ -616,17 +640,10 @@ namespace GameTaskPlugin
                             logger.Log($"Task creation result: created={created} failed={failed}");
 
                             if (failed == 0)
-                            {
-                                notificationManager.ShowInfo(
-                                    $"{created} task(s) created successfully.");
-                            }
+                                notificationManager.ShowInfo($"{created} task(s) created successfully.");
                             else
-                            {
-                                notificationManager.ShowError(
-                                    $"{created} task(s) created, {failed} failed. Check the data folder logs for details.");
-                            }
+                                notificationManager.ShowError($"{created} task(s) created, {failed} failed. Check Logs\\PS1.log for details.");
 
-                            // Remove the pending notification since tasks are now registered
                             api.Notifications.Remove("GameTaskPending");
                         }
                         catch (Exception ex) { logger.Log($"ERROR reading result file: {ex.Message}"); }
@@ -655,7 +672,7 @@ namespace GameTaskPlugin
         }
 
         // =====================================================
-        // UTILITY ACTIONS
+        // UTILITY
         // =====================================================
 
         private void OpenDataFolder()
@@ -710,7 +727,9 @@ namespace GameTaskPlugin
 
         public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
         {
-            int taggedCount = api.Database.Games.Count(HasGameTaskTag);
+            int taggedCount  = api.Database.Games.Count(HasGameTaskTag);
+            int unknownCount = api.Database.Games.Count(g => HasGameTaskTag(g) &&
+                string.IsNullOrWhiteSpace(ResolveExePathForGame(g)));
 
             yield return new MainMenuItem
             {
@@ -722,12 +741,27 @@ namespace GameTaskPlugin
             yield return new MainMenuItem
             {
                 MenuSection = "@GameTask",
+                Description = unknownCount > 0
+                    ? $"Fix All Unknown Executables ({unknownCount})"
+                    : "Fix All Unknown Executables",
+                Action = _ => FixAllUnknownExecutables()
+            };
+
+            yield return new MainMenuItem
+            {
+                MenuSection = "@GameTask",
                 Description = "Clean Orphan Tasks",
                 Action      = _ => CleanOrphanTasks()
             };
 
-            // Quick-access toggles — useful in fullscreen mode where
-            // the native settings page (Settings → Plugins) is harder to reach
+            yield return new MainMenuItem
+            {
+                MenuSection = "@GameTask",
+                Description = "Open Data Folder",
+                Action      = _ => OpenDataFolder()
+            };
+
+            // Quick-access settings toggles
             var s = settingsManager.Current;
 
             yield return new MainMenuItem

@@ -6,8 +6,11 @@
     <AssemblyName>GameTask.FocusGuard</AssemblyName>
     <UseWPF>false</UseWPF>
     <UseWindowsForms>false</UseWindowsForms>
-    <Nullable>disable</Nullable>
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WMI for child process detection — read-only, anti-cheat safe -->
+    <Reference Include="System.Management" />
+  </ItemGroup>
 
 </Project>

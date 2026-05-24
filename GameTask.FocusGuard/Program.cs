@@ -4,6 +4,15 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 
+/// <summary>
+/// GameTask.FocusGuard.exe <ExeName.exe> [guardSeconds] [logPath]
+/// 
+/// Waits for the given process to appear, then aggressively keeps
+/// its window in the foreground for guardSeconds (default 20).
+/// Also monitors child processes in case the initial process spawns
+/// the real game (e.g. launchers, anti-cheat wrappers).
+/// Called directly by the game launcher .vbs right after schtasks /run.
+/// </summary>
 class Program
 {
     #region Win32
@@ -57,7 +66,7 @@ class Program
 
     static void Log(string msg)
     {
-        try { File.AppendAllText(logFile, $"[{DateTime.Now:HH:mm:ss}] {msg}\r\n"); } catch { }
+        try { File.AppendAllText(logFile, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\r\n"); } catch { }
     }
 
     [STAThread]
@@ -68,8 +77,7 @@ class Program
         string exeName   = Path.GetFileNameWithoutExtension(args[0]);
         int    guardSecs = args.Length > 1 && int.TryParse(args[1], out int s) ? s : 20;
 
-        // Log path passed as 3rd argument (plugin data folder\Logs\FocusGuard.log)
-        // Falls back to exe directory if not provided
+        // Log path — 3rd argument points to plugin data Logs folder
         if (args.Length > 2 && !string.IsNullOrWhiteSpace(args[2]))
         {
             logFile = args[2];
@@ -82,28 +90,30 @@ class Program
             logFile = Path.Combine(dir, "FocusGuard.log");
         }
 
-        Log($"=== Started. exeName={exeName} guardSecs={guardSecs} ===");
+        Log($"=== Started. target={exeName} guard={guardSecs}s ===");
 
-        // Step 1 — wait up to 60 s for the process
+        // Step 1 — wait up to 60 s for the target process OR any child of it
         Process proc = WaitForProcess(exeName, 60_000);
         if (proc == null) { Log("Process not found within timeout."); return; }
 
         gamePid = proc.Id;
-        Log($"Process found. PID={gamePid}");
+        Log($"Process found. name={proc.ProcessName} PID={gamePid}");
 
-        // Step 2 — wait up to 30 s for a window handle
-        gameHwnd = WaitForWindow(proc, 30_000);
+        // Step 2 — wait up to 30 s for a window handle.
+        // Also watch child processes — some games spawn a child that owns the actual window
+        // (e.g. anti-cheat wrappers, GOG Galaxy launcher, etc.)
+        gameHwnd = WaitForWindowWithChildren(proc, 30_000);
         if (gameHwnd == IntPtr.Zero) { Log("Window handle not found within timeout."); return; }
 
-        Log($"Window found. HWND={gameHwnd}");
+        Log($"Window found. HWND=0x{gameHwnd:X} PID={gamePid}");
 
-        // Step 3 — install hook + message pump
+        // Step 3 — install foreground event hook + message pump
         uint myTid = GetCurrentThreadId();
 
         WinEventProc hookDelegate = (hk, evt, hwnd, obj, child, thr, time) =>
         {
-            if (hwnd == gameHwnd) { Log($"Game already in foreground."); return; }
-            Log($"Foreground stolen by HWND={hwnd} — reclaiming...");
+            if (hwnd == gameHwnd) return;
+            Log($"Foreground stolen by HWND=0x{hwnd:X} — reclaiming...");
             ForceForeground();
         };
 
@@ -121,7 +131,7 @@ class Program
             PostThreadMessage(myTid, WM_USER_STOP, IntPtr.Zero, IntPtr.Zero),
             null, guardSecs * 1000, Timeout.Infinite);
 
-        // Message pump
+        // Message pump — required for hook to fire
         MSG msg;
         while (GetMessage(out msg, IntPtr.Zero, 0, 0))
         {
@@ -132,7 +142,7 @@ class Program
 
         timer.Dispose();
         UnhookWinEvent(hook);
-        Log("=== Stopped. ===");
+        Log("=== Guard finished. ===");
     }
 
     static void ForceForeground()
@@ -149,23 +159,24 @@ class Program
         var    fgTid = GetWindowThreadProcessId(fg, out dummy);
         var    myTid = GetCurrentThreadId();
 
-        Log($"ForceForeground: fg=0x{fg:X} fgTid={fgTid} myTid={myTid}");
-
         if (fgTid != 0 && fgTid != myTid)
         {
             AttachThreadInput(myTid, fgTid, true);
-            bool r1 = SetForegroundWindow(hwnd);
+            bool r = SetForegroundWindow(hwnd);
             ShowWindow(hwnd, 9);
             AttachThreadInput(myTid, fgTid, false);
-            Log($"SetForegroundWindow (attached) result={r1}");
+            Log($"SetForegroundWindow (attached) result={r}");
         }
         else
         {
-            bool r1 = SetForegroundWindow(hwnd);
-            Log($"SetForegroundWindow result={r1}");
+            bool r = SetForegroundWindow(hwnd);
+            Log($"SetForegroundWindow result={r}");
         }
     }
 
+    // =========================================================
+    // Wait for the target process by name
+    // =========================================================
     static Process WaitForProcess(string name, int timeoutMs)
     {
         int elapsed = 0;
@@ -173,6 +184,7 @@ class Program
         {
             Thread.Sleep(500);
             elapsed += 500;
+
             var list = Process.GetProcessesByName(name);
             if (list.Length > 0)
             {
@@ -183,20 +195,75 @@ class Program
         return null;
     }
 
-    static IntPtr WaitForWindow(Process proc, int timeoutMs)
+    // =========================================================
+    // Wait for a window handle on the process OR any child process.
+    // This handles games that spawn a child process which owns
+    // the actual game window (anti-cheat, GOG/Steam helpers, etc.).
+    // Note: we do NOT kill or interfere with child processes —
+    // we only observe them. Anti-cheat safe.
+    // =========================================================
+    static IntPtr WaitForWindowWithChildren(Process root, int timeoutMs)
     {
         int elapsed = 0;
         while (elapsed < timeoutMs)
         {
             Thread.Sleep(500);
             elapsed += 500;
-            try { proc.Refresh(); } catch { return IntPtr.Zero; }
-            if (proc.MainWindowHandle != IntPtr.Zero)
+
+            // Check the root process first
+            try
             {
-                Log($"Window appeared after {elapsed}ms");
-                return proc.MainWindowHandle;
+                root.Refresh();
+                if (root.MainWindowHandle != IntPtr.Zero)
+                {
+                    Log($"Window on root process after {elapsed}ms");
+                    return root.MainWindowHandle;
+                }
             }
+            catch { return IntPtr.Zero; }
+
+            // Check child processes (read-only, no interference)
+            try
+            {
+                var children = GetChildProcesses(root.Id);
+                foreach (var child in children)
+                {
+                    try
+                    {
+                        child.Refresh();
+                        if (child.MainWindowHandle != IntPtr.Zero)
+                        {
+                            // Switch target to the child that has the window
+                            gamePid  = child.Id;
+                            Log($"Window on child process '{child.ProcessName}' PID={gamePid} after {elapsed}ms");
+                            return child.MainWindowHandle;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
         return IntPtr.Zero;
+    }
+
+    static Process[] GetChildProcesses(int parentPid)
+    {
+        var children = new System.Collections.Generic.List<Process>();
+        try
+        {
+            // Use WMI to find child processes — read-only, no interference with anti-cheat
+            var query = $"SELECT ProcessId FROM Win32_Process WHERE ParentProcessId = {parentPid}";
+            using (var searcher = new System.Management.ManagementObjectSearcher(query))
+            {
+                foreach (var obj in searcher.Get())
+                {
+                    int pid = Convert.ToInt32(obj["ProcessId"]);
+                    try { children.Add(Process.GetProcessById(pid)); } catch { }
+                }
+            }
+        }
+        catch { }
+        return children.ToArray();
     }
 }

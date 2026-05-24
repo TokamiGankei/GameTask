@@ -8,7 +8,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ### Fixed
 - Game window losing focus to Playnite fullscreen when splash screen closes — replaced in-process focus logic with a standalone `GameTask.FocusGuard.exe` launched directly by the `.vbs` launcher immediately after the scheduled task fires, before Playnite has a chance to reclaim the foreground (reported by @bobokaka)
-
+- `FocusGuard.exe` receiving the Playnite action name instead of the real game executable — now correctly uses custom path or resolved exe
+- File selection dialog now rejects shortcuts (`.lnk`) with a clear warning message, preventing the user from accidentally selecting a shortcut instead of the actual `.exe`
 ---
 
 ## [v1.2.1] — 2026-05-21
