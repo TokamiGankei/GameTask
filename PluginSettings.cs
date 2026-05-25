@@ -16,6 +16,7 @@ namespace GameTaskPlugin
         private bool bringWindowToForeground = true;
         private bool detectOrphanTasks       = true;
         private bool detectCorruptedTasks    = true;
+        private bool lowPerformanceMode      = false;
 
         public bool BringWindowToForeground
         {
@@ -34,6 +35,28 @@ namespace GameTaskPlugin
             get => detectCorruptedTasks;
             set => SetValue(ref detectCorruptedTasks, value);
         }
+
+        public bool LowPerformanceMode
+        {
+            get => lowPerformanceMode;
+            set => SetValue(ref lowPerformanceMode, value);
+        }
+
+        // =========================================================
+        // FocusGuard parameters — derived from LowPerformanceMode
+        // =========================================================
+
+        /// <summary>Max ms to wait for the game process to appear.</summary>
+        public int FocusProcessTimeoutMs  => LowPerformanceMode ? 120_000 : 60_000;
+
+        /// <summary>Max ms to wait for the game window handle to appear.</summary>
+        public int FocusWindowTimeoutMs   => LowPerformanceMode ? 60_000  : 30_000;
+
+        /// <summary>Number of aggressive foreground pushes right after window appears.</summary>
+        public int FocusEarlyPushCount    => LowPerformanceMode ? 8       : 4;
+
+        /// <summary>Interval in ms between early pushes.</summary>
+        public int FocusEarlyPushInterval => LowPerformanceMode ? 250     : 300;
     }
 
     // =========================================================
@@ -60,7 +83,8 @@ namespace GameTaskPlugin
             {
                 BringWindowToForeground = Settings.BringWindowToForeground,
                 DetectOrphanTasks       = Settings.DetectOrphanTasks,
-                DetectCorruptedTasks    = Settings.DetectCorruptedTasks
+                DetectCorruptedTasks    = Settings.DetectCorruptedTasks,
+                LowPerformanceMode      = Settings.LowPerformanceMode
             };
         }
 
@@ -69,6 +93,7 @@ namespace GameTaskPlugin
             Settings.BringWindowToForeground = snapshot.BringWindowToForeground;
             Settings.DetectOrphanTasks       = snapshot.DetectOrphanTasks;
             Settings.DetectCorruptedTasks    = snapshot.DetectCorruptedTasks;
+            Settings.LowPerformanceMode      = snapshot.LowPerformanceMode;
         }
 
         public void EndEdit() => settingsManager.Save();
@@ -127,14 +152,13 @@ namespace GameTaskPlugin
                     switch (key)
                     {
                         case "BringWindowToForeground":
-                            current.BringWindowToForeground = value == "true";
-                            break;
+                            current.BringWindowToForeground = value == "true"; break;
                         case "DetectOrphanTasks":
-                            current.DetectOrphanTasks = value == "true";
-                            break;
+                            current.DetectOrphanTasks = value == "true"; break;
                         case "DetectCorruptedTasks":
-                            current.DetectCorruptedTasks = value == "true";
-                            break;
+                            current.DetectCorruptedTasks = value == "true"; break;
+                        case "LowPerformanceMode":
+                            current.LowPerformanceMode = value == "true"; break;
                     }
                 }
 
@@ -156,7 +180,8 @@ namespace GameTaskPlugin
                     "# GameTask Settings",
                     $"BringWindowToForeground={BoolToStr(current.BringWindowToForeground)}",
                     $"DetectOrphanTasks={BoolToStr(current.DetectOrphanTasks)}",
-                    $"DetectCorruptedTasks={BoolToStr(current.DetectCorruptedTasks)}"
+                    $"DetectCorruptedTasks={BoolToStr(current.DetectCorruptedTasks)}",
+                    $"LowPerformanceMode={BoolToStr(current.LowPerformanceMode)}"
                 };
 
                 File.WriteAllLines(settingsFile, lines, Encoding.UTF8);

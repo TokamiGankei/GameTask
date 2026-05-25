@@ -90,22 +90,38 @@ class Program
             logFile = Path.Combine(dir, "FocusGuard.log");
         }
 
-        Log($"=== Started. target={exeName} guard={guardSecs}s ===");
+        // Dynamic parameters from LowPerformanceMode setting
+        // args[3] = processTimeoutMs, args[4] = windowTimeoutMs
+        // args[5] = earlyPushCount,   args[6] = earlyPushInterval
+        int processTimeoutMs  = args.Length > 3 && int.TryParse(args[3], out int pt)  ? pt  : 60_000;
+        int windowTimeoutMs   = args.Length > 4 && int.TryParse(args[4], out int wt)  ? wt  : 30_000;
+        int earlyPushCount    = args.Length > 5 && int.TryParse(args[5], out int epc) ? epc : 4;
+        int earlyPushInterval = args.Length > 6 && int.TryParse(args[6], out int epi) ? epi : 300;
 
-        // Step 1 — wait up to 60 s for the target process OR any child of it
-        Process proc = WaitForProcess(exeName, 60_000);
+        Log($"=== Started. target={exeName} guard={guardSecs}s procTimeout={processTimeoutMs}ms winTimeout={windowTimeoutMs}ms pushes={earlyPushCount}x{earlyPushInterval}ms ===");
+
+        // Step 1 — wait for the target process
+        Process proc = WaitForProcess(exeName, processTimeoutMs);
         if (proc == null) { Log("Process not found within timeout."); return; }
 
         gamePid = proc.Id;
         Log($"Process found. name={proc.ProcessName} PID={gamePid}");
 
-        // Step 2 — wait up to 30 s for a window handle.
-        // Also watch child processes — some games spawn a child that owns the actual window
-        // (e.g. anti-cheat wrappers, GOG Galaxy launcher, etc.)
-        gameHwnd = WaitForWindowWithChildren(proc, 30_000);
+        // Step 2 — wait for a window handle (root or child process)
+        gameHwnd = WaitForWindowWithChildren(proc, windowTimeoutMs);
         if (gameHwnd == IntPtr.Zero) { Log("Window handle not found within timeout."); return; }
 
         Log($"Window found. HWND=0x{gameHwnd:X} PID={gamePid}");
+
+        // Step 2b — aggressive early pushes right after window appears.
+        // On slow/busy systems the hook may fire too late during the
+        // critical moment when the splash closes. These early retries
+        // cover that window before the hook is even installed.
+        for (int i = 0; i < earlyPushCount; i++)
+        {
+            ForceForeground();
+            Thread.Sleep(earlyPushInterval);
+        }
 
         // Step 3 — install foreground event hook + message pump
         uint myTid = GetCurrentThreadId();
@@ -123,7 +139,7 @@ class Program
 
         Log($"Hook installed. Guarding for {guardSecs}s...");
 
-        // Initial push
+        // Initial push after hook installed
         ForceForeground();
 
         // Stop after guardSecs

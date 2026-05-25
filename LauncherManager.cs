@@ -9,6 +9,7 @@ namespace GameTaskPlugin
         private readonly Logger          logger;
         private readonly string          launchersFolder;
         private readonly string          focusGuardExePath;
+        private readonly string          focusGuardLogPath;
         private readonly SettingsManager settings;
 
         public LauncherManager(Logger logger, string pluginDataPath, SettingsManager settings)
@@ -16,8 +17,11 @@ namespace GameTaskPlugin
             this.logger   = logger;
             this.settings = settings;
 
-            launchersFolder = Path.Combine(pluginDataPath, "Launchers");
+            launchersFolder   = Path.Combine(pluginDataPath, "Launchers");
+            focusGuardLogPath = Path.Combine(pluginDataPath, "Logs", "FocusGuard.log");
+
             Directory.CreateDirectory(launchersFolder);
+            Directory.CreateDirectory(Path.Combine(pluginDataPath, "Logs"));
 
             string pluginInstallDir = Path.GetDirectoryName(
                 System.Reflection.Assembly.GetExecutingAssembly().Location);
@@ -55,9 +59,12 @@ namespace GameTaskPlugin
                 !string.IsNullOrWhiteSpace(exeFileName) &&
                 File.Exists(focusGuardExePath))
             {
+                var s = settings.Current;
                 content +=
                     $"shell.Run Chr(34) & \"{focusGuardExePath}\" & Chr(34) & " +
-                    $"\" \" & Chr(34) & \"{exeFileName}\" & Chr(34) & \" 20\", 0, False\r\n";
+                    $"\" \" & Chr(34) & \"{exeFileName}\" & Chr(34) & " +
+                    $"\" 20 \" & Chr(34) & \"{focusGuardLogPath}\" & Chr(34) & " +
+                    $"\" {s.FocusProcessTimeoutMs} {s.FocusWindowTimeoutMs} {s.FocusEarlyPushCount} {s.FocusEarlyPushInterval}\", 0, False\r\n";
             }
 
             File.WriteAllText(launcherPath, content, Encoding.ASCII);

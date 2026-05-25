@@ -4,7 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
-             d:DesignHeight="300" d:DesignWidth="500">
+             d:DesignHeight="380" d:DesignWidth="500">
 
     <StackPanel Margin="20">
 
@@ -15,21 +15,27 @@
 
         <!-- Bring to Foreground -->
         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-            <CheckBox IsChecked="{Binding Settings.BringWindowToForeground}"
-                      VerticalAlignment="Center"/>
-            <TextBlock Text="Bring game window to foreground after launch"
-                       VerticalAlignment="Center"
-                       Margin="8,0,0,0"/>
-            <TextBlock Text="?"
-                       VerticalAlignment="Center"
-                       Margin="6,0,0,0"
-                       Foreground="Gray"
-                       FontWeight="Bold"
-                       Cursor="Help">
+            <CheckBox IsChecked="{Binding Settings.BringWindowToForeground}" VerticalAlignment="Center"/>
+            <TextBlock Text="Bring game window to foreground after launch" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <TextBlock Text="?" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
                 <TextBlock.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                            Text="When enabled, GameTask waits for the game process to appear and automatically brings its window to the foreground. Recommended for Playnite fullscreen mode, where games may open behind the Playnite window.&#x0a;&#x0a;After changing this setting, run 'Repair All Tagged Games' so the launchers are regenerated." />
+                            Text="When enabled, GameTask waits for the game process and automatically brings its window to the foreground. Recommended for Playnite fullscreen mode.&#x0a;&#x0a;After changing this setting, run 'Repair All Tagged Games' to regenerate the launchers." />
+                    </ToolTip>
+                </TextBlock.ToolTip>
+            </TextBlock>
+        </StackPanel>
+
+        <!-- Low Performance Mode -->
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
+            <CheckBox IsChecked="{Binding Settings.LowPerformanceMode}" VerticalAlignment="Center"/>
+            <TextBlock Text="Low Performance Mode" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <TextBlock Text="?" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
+                <TextBlock.ToolTip>
+                    <ToolTip>
+                        <TextBlock MaxWidth="320" TextWrapping="Wrap"
+                            Text="Recommended for slower PCs or when many applications are open simultaneously. Increases the time GameTask waits for the game process and window to appear, and adds more foreground push attempts to ensure the game comes to the front reliably.&#x0a;&#x0a;Normal: process timeout 60s, window timeout 30s, 4 early pushes.&#x0a;Low Performance: process timeout 120s, window timeout 60s, 8 early pushes.&#x0a;&#x0a;Run 'Repair All Tagged Games' after changing this setting." />
                     </ToolTip>
                 </TextBlock.ToolTip>
             </TextBlock>
@@ -37,21 +43,13 @@
 
         <!-- Detect Orphan Tasks -->
         <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
-            <CheckBox IsChecked="{Binding Settings.DetectOrphanTasks}"
-                      VerticalAlignment="Center"/>
-            <TextBlock Text="Detect orphan tasks on startup"
-                       VerticalAlignment="Center"
-                       Margin="8,0,0,0"/>
-            <TextBlock Text="?"
-                       VerticalAlignment="Center"
-                       Margin="6,0,0,0"
-                       Foreground="Gray"
-                       FontWeight="Bold"
-                       Cursor="Help">
+            <CheckBox IsChecked="{Binding Settings.DetectOrphanTasks}" VerticalAlignment="Center"/>
+            <TextBlock Text="Detect orphan tasks on startup" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <TextBlock Text="?" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
                 <TextBlock.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                            Text="When enabled, GameTask checks the Windows Task Scheduler on every Playnite startup and notifies you if it finds tasks that no longer match any game in your library (e.g. games removed without using 'Disable GameTask').&#x0a;&#x0a;You can also trigger this check manually via Extensions → GameTask → Clean Orphan Tasks." />
+                            Text="When enabled, GameTask checks the Windows Task Scheduler on every Playnite startup and notifies you if it finds tasks that no longer match any game in your library.&#x0a;&#x0a;You can also trigger this manually via Extensions → GameTask → Clean Orphan Tasks." />
                     </ToolTip>
                 </TextBlock.ToolTip>
             </TextBlock>
@@ -59,21 +57,13 @@
 
         <!-- Detect Corrupted Tasks -->
         <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
-            <CheckBox IsChecked="{Binding Settings.DetectCorruptedTasks}"
-                      VerticalAlignment="Center"/>
-            <TextBlock Text="Detect corrupted tasks on startup"
-                       VerticalAlignment="Center"
-                       Margin="8,0,0,0"/>
-            <TextBlock Text="?"
-                       VerticalAlignment="Center"
-                       Margin="6,0,0,0"
-                       Foreground="Gray"
-                       FontWeight="Bold"
-                       Cursor="Help">
+            <CheckBox IsChecked="{Binding Settings.DetectCorruptedTasks}" VerticalAlignment="Center"/>
+            <TextBlock Text="Detect corrupted tasks on startup" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <TextBlock Text="?" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
                 <TextBlock.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                            Text="When enabled, GameTask checks whether the executable path registered in each scheduled task still exists on disk. If a game was moved or uninstalled without disabling GameTask first, the task becomes corrupted.&#x0a;&#x0a;A notification will appear for each affected game with a link to fix the executable path." />
+                            Text="When enabled, GameTask checks whether the executable registered for each scheduled task still exists on disk. If a game was moved or uninstalled without disabling GameTask first, the task becomes corrupted and a fix notification will appear." />
                     </ToolTip>
                 </TextBlock.ToolTip>
             </TextBlock>
@@ -82,7 +72,7 @@
         <Separator Margin="0,16,0,12"/>
 
         <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11"
-                   Text="Changes are saved automatically when you click OK. Some settings (e.g. 'Bring game window to foreground') require running 'Repair All Tagged Games' to take effect on existing games." />
+                   Text="Changes are saved automatically when you click OK. Settings marked with 'Run Repair All' require running Extensions → GameTask → Repair All Tagged Games to take effect on existing games." />
 
     </StackPanel>
 </UserControl>
