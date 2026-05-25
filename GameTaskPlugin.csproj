@@ -21,4 +21,15 @@
 		<None Remove="GameTask.FocusGuard\**" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<Page Include="SettingsView.xaml">
+			<Generator>MSBuild:Compile</Generator>
+			<SubType>Designer</SubType>
+		</Page>
+		<Page Include="DiagnosticsView.xaml">
+			<Generator>MSBuild:Compile</Generator>
+			<SubType>Designer</SubType>
+		</Page>
+	</ItemGroup>
+
 </Project>

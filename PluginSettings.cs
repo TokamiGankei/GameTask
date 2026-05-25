@@ -17,6 +17,7 @@ namespace GameTaskPlugin
         private bool detectOrphanTasks       = true;
         private bool detectCorruptedTasks    = true;
         private bool lowPerformanceMode      = false;
+        private int  guardSeconds            = 20;
 
         public bool BringWindowToForeground
         {
@@ -40,6 +41,13 @@ namespace GameTaskPlugin
         {
             get => lowPerformanceMode;
             set => SetValue(ref lowPerformanceMode, value);
+        }
+
+        /// <summary>How long FocusGuard keeps the game in the foreground after launch.</summary>
+        public int GuardSeconds
+        {
+            get => guardSeconds;
+            set => SetValue(ref guardSeconds, Math.Max(5, Math.Min(120, value)));
         }
 
         // =========================================================
@@ -84,7 +92,8 @@ namespace GameTaskPlugin
                 BringWindowToForeground = Settings.BringWindowToForeground,
                 DetectOrphanTasks       = Settings.DetectOrphanTasks,
                 DetectCorruptedTasks    = Settings.DetectCorruptedTasks,
-                LowPerformanceMode      = Settings.LowPerformanceMode
+                LowPerformanceMode      = Settings.LowPerformanceMode,
+                GuardSeconds            = Settings.GuardSeconds
             };
         }
 
@@ -94,6 +103,7 @@ namespace GameTaskPlugin
             Settings.DetectOrphanTasks       = snapshot.DetectOrphanTasks;
             Settings.DetectCorruptedTasks    = snapshot.DetectCorruptedTasks;
             Settings.LowPerformanceMode      = snapshot.LowPerformanceMode;
+            Settings.GuardSeconds            = snapshot.GuardSeconds;
         }
 
         public void EndEdit() => settingsManager.Save();
@@ -159,6 +169,8 @@ namespace GameTaskPlugin
                             current.DetectCorruptedTasks = value == "true"; break;
                         case "LowPerformanceMode":
                             current.LowPerformanceMode = value == "true"; break;
+                        case "GuardSeconds":
+                            if (int.TryParse(value, out int gs)) current.GuardSeconds = gs; break;
                     }
                 }
 
@@ -181,7 +193,8 @@ namespace GameTaskPlugin
                     $"BringWindowToForeground={BoolToStr(current.BringWindowToForeground)}",
                     $"DetectOrphanTasks={BoolToStr(current.DetectOrphanTasks)}",
                     $"DetectCorruptedTasks={BoolToStr(current.DetectCorruptedTasks)}",
-                    $"LowPerformanceMode={BoolToStr(current.LowPerformanceMode)}"
+                    $"LowPerformanceMode={BoolToStr(current.LowPerformanceMode)}",
+                    $"GuardSeconds={current.GuardSeconds}"
                 };
 
                 File.WriteAllLines(settingsFile, lines, Encoding.UTF8);

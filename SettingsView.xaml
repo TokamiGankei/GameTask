@@ -27,6 +27,31 @@
             </TextBlock>
         </StackPanel>
 
+        <!-- Guard Duration -->
+        <StackPanel Margin="0,8,0,4">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Focus guard duration:" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Settings.GuardSeconds, StringFormat='{}{0}s'}"
+                           VerticalAlignment="Center" Margin="8,0,0,0" FontWeight="Bold" Width="35"/>
+                <TextBlock Text="?" VerticalAlignment="Center" Margin="4,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
+                    <TextBlock.ToolTip>
+                        <ToolTip>
+                            <TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="How long FocusGuard keeps the game window in the foreground after launch. Increase this if your game takes a long time to fully initialize and loses focus during loading.&#x0a;&#x0a;Default: 20s. Range: 5s – 120s.&#x0a;&#x0a;Run 'Repair All Tagged Games' after changing this setting." />
+                        </ToolTip>
+                    </TextBlock.ToolTip>
+                </TextBlock>
+            </StackPanel>
+            <Slider Minimum="5" Maximum="120"
+                    Value="{Binding Settings.GuardSeconds}"
+                    TickFrequency="5" IsSnapToTickEnabled="True"
+                    Margin="0,4,0,0" Width="300" HorizontalAlignment="Left"/>
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <TextBlock Text="5s" Foreground="Gray" FontSize="10"/>
+                <TextBlock Text="120s" Foreground="Gray" FontSize="10" Margin="270,0,0,0"/>
+            </StackPanel>
+        </StackPanel>
+
         <!-- Low Performance Mode -->
         <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
             <CheckBox IsChecked="{Binding Settings.LowPerformanceMode}" VerticalAlignment="Center"/>

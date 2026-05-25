@@ -1,0 +1,73 @@
+<Window x:Class="GameTaskPlugin.DiagnosticsView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GameTask — Diagnostics"
+        Width="820" Height="520"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize">
+
+    <Window.Resources>
+        <Style x:Key="StatusText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="4,0"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="GameTask Diagnostics" FontSize="16" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="{Binding Summary}" Foreground="Gray" FontSize="11"/>
+        </StackPanel>
+
+        <!-- Game list -->
+        <DataGrid Grid.Row="1"
+                  ItemsSource="{Binding Games}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserReorderColumns="False"
+                  CanUserSortColumns="True"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  SelectionMode="Single"
+                  RowHeaderWidth="0"
+                  x:Name="GameGrid">
+
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Game" Binding="{Binding Name}" Width="*" MinWidth="160"/>
+                <DataGridTextColumn Header="Task" Binding="{Binding TaskStatus}" Width="90"/>
+                <DataGridTextColumn Header="Executable" Binding="{Binding ExeName}" Width="140"/>
+                <DataGridTextColumn Header="FocusGuard" Binding="{Binding FocusStatus}" Width="90"/>
+                <DataGridTextColumn Header="Custom Path" Binding="{Binding CustomPath}" Width="160"/>
+            </DataGrid.Columns>
+
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasIssue}" Value="True">
+                            <Setter Property="Foreground" Value="#FF6B6B"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+        </DataGrid>
+
+        <!-- Footer buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
+            <Button Content="Fix All Unknown Executables" Padding="10,5" Margin="0,0,8,0"
+                    Command="{Binding FixAllCommand}"/>
+            <Button Content="Repair All" Padding="10,5" Margin="0,0,8,0"
+                    Command="{Binding RepairAllCommand}"/>
+            <Button Content="Refresh" Padding="10,5" Margin="0,0,8,0"
+                    Command="{Binding RefreshCommand}"/>
+            <Button Content="Close" Padding="10,5" IsCancel="True"
+                    Click="CloseButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

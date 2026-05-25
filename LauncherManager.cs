@@ -63,7 +63,7 @@ namespace GameTaskPlugin
                 content +=
                     $"shell.Run Chr(34) & \"{focusGuardExePath}\" & Chr(34) & " +
                     $"\" \" & Chr(34) & \"{exeFileName}\" & Chr(34) & " +
-                    $"\" 20 \" & Chr(34) & \"{focusGuardLogPath}\" & Chr(34) & " +
+                    $"\" {s.GuardSeconds} \" & Chr(34) & \"{focusGuardLogPath}\" & Chr(34) & " +
                     $"\" {s.FocusProcessTimeoutMs} {s.FocusWindowTimeoutMs} {s.FocusEarlyPushCount} {s.FocusEarlyPushInterval}\", 0, False\r\n";
             }
 

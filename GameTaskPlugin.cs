@@ -672,8 +672,27 @@ namespace GameTaskPlugin
         }
 
         // =====================================================
-        // UTILITY
+        // PUBLIC METHODS FOR DIAGNOSTICS VIEW
         // =====================================================
+
+        public bool HasGameTaskTagPublic(Game game) => HasGameTaskTag(game);
+
+        public string ResolveExePathPublic(Game game) => ResolveExePathForGame(game);
+
+        public void InvokeFixAllUnknownExecutables() => FixAllUnknownExecutables();
+
+        public void InvokeRepairAll() => RepairAll();
+
+        // =====================================================
+        // OPEN DIAGNOSTICS
+        // =====================================================
+
+        private void OpenDiagnostics()
+        {
+            var vm   = new DiagnosticsViewModel(api, this, pathManager, taskManager, ActionName);
+            var view = new DiagnosticsView { DataContext = vm };
+            view.ShowDialog();
+        }
 
         private void OpenDataFolder()
         {
@@ -759,6 +778,13 @@ namespace GameTaskPlugin
                 MenuSection = "@GameTask",
                 Description = "Open Data Folder",
                 Action      = _ => OpenDataFolder()
+            };
+
+            yield return new MainMenuItem
+            {
+                MenuSection = "@GameTask",
+                Description = "Diagnostics",
+                Action      = _ => OpenDiagnostics()
             };
 
             // Quick-access settings toggles
