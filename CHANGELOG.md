@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
+## [v1.4.0] — 2026-05-25
+
+### Added
+- Diagnostics page — Extensions → GameTask → Diagnostics; shows all tagged games with task status, detected executable, FocusGuard status and custom path; games with issues highlighted in red
+- Focus guard duration setting — slider from 5s to 120s (default 20s) in Settings → Plugins → GameTask
+
+### Fixed
+- "Enable GameTask" and "Rebuild Selected" not showing pending task notification — `AddPendingTask` was silently skipping games with custom paths or launcher-type actions
+- "Create Pending Tasks" now automatically rescans for missing scheduled tasks when the pending queue is empty (reported by @bobokaka)
+
+---
+
 ## [v1.3.0] — 2026-05-24
 
 ### Added
