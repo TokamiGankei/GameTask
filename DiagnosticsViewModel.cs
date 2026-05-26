@@ -1,8 +1,10 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Windows.Input;
 
 using Playnite.SDK;
@@ -15,37 +17,43 @@ namespace GameTaskPlugin
     // =========================================================
     public class GameDiagnosticRow
     {
-        public string Name       { get; set; }
-        public string TaskStatus { get; set; }
-        public string ExeName    { get; set; }
-        public string FocusStatus{ get; set; }
-        public string CustomPath { get; set; }
-        public bool   HasIssue   { get; set; }
+        public string Name        { get; set; }
+        public string TaskStatus  { get; set; }
+        public string ExeName     { get; set; }
+        public string FocusStatus { get; set; }
+        public string CustomPath  { get; set; }
+        public bool   HasIssue    { get; set; }
     }
 
     // =========================================================
-    // ViewModel
+    // ViewModel — implements INotifyPropertyChanged directly
+    // to avoid dependency on ObservableObject from PlayniteSDK
     // =========================================================
-    public class DiagnosticsViewModel : ObservableObject
+    public class DiagnosticsViewModel : INotifyPropertyChanged
     {
-        private readonly IPlayniteAPI    api;
-        private readonly GameTaskPlugin  plugin;
-        private readonly PathManager     pathManager;
-        private readonly TaskManager     taskManager;
-        private readonly string          actionName;
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        private readonly IPlayniteAPI   api;
+        private readonly GameTaskPlugin plugin;
+        private readonly PathManager    pathManager;
+        private readonly TaskManager    taskManager;
+        private readonly string         actionName;
 
         private ObservableCollection<GameDiagnosticRow> games;
-        public  ObservableCollection<GameDiagnosticRow> Games
+        public ObservableCollection<GameDiagnosticRow> Games
         {
             get => games;
-            set => SetValue(ref games, value);
+            set { games = value; OnPropertyChanged(); }
         }
 
         private string summary;
         public string Summary
         {
             get => summary;
-            set => SetValue(ref summary, value);
+            set { summary = value; OnPropertyChanged(); }
         }
 
         public ICommand FixAllCommand    { get; }
@@ -76,35 +84,35 @@ namespace GameTaskPlugin
         {
             var rows = new ObservableCollection<GameDiagnosticRow>();
 
-            foreach (var game in api.Database.Games.Where(plugin.HasGameTaskTagPublic).OrderBy(g => g.Name))
+            foreach (var game in api.Database.Games
+                .Where(plugin.HasGameTaskTagPublic)
+                .OrderBy(g => g.Name))
             {
-                string customExe    = pathManager.GetCustomPath(game);
-                string resolvedExe  = plugin.ResolveExePathPublic(game);
-                string exeFileName  = string.IsNullOrWhiteSpace(resolvedExe)
+                string customExe   = pathManager.GetCustomPath(game);
+                string resolvedExe = plugin.ResolveExePathPublic(game);
+                string exeFileName = string.IsNullOrWhiteSpace(resolvedExe)
                     ? "❌ Unknown"
                     : Path.GetFileName(resolvedExe);
 
-                bool taskExists     = TaskExists(game);
-                bool hasExe         = !string.IsNullOrWhiteSpace(resolvedExe);
-                bool focusActive    = hasExe;
-                bool hasIssue       = !taskExists || !hasExe;
+                bool taskExists  = TaskExists(game);
+                bool hasExe      = !string.IsNullOrWhiteSpace(resolvedExe);
+                bool hasIssue    = !taskExists || !hasExe;
 
                 rows.Add(new GameDiagnosticRow
                 {
                     Name        = game.Name,
-                    TaskStatus  = taskExists  ? "✅ Created" : "❌ Missing",
+                    TaskStatus  = taskExists ? "✅ Created"  : "❌ Missing",
                     ExeName     = exeFileName,
-                    FocusStatus = focusActive ? "✅ Active"  : "❌ Inactive",
+                    FocusStatus = hasExe     ? "✅ Active"   : "❌ Inactive",
                     CustomPath  = string.IsNullOrWhiteSpace(customExe) ? "" : customExe,
                     HasIssue    = hasIssue
                 });
             }
 
-            Games = rows;
-
-            int total   = rows.Count;
-            int issues  = rows.Count(r => r.HasIssue);
-            Summary     = issues == 0
+            Games   = rows;
+            int total  = rows.Count;
+            int issues = rows.Count(r => r.HasIssue);
+            Summary = issues == 0
                 ? $"{total} game(s) — all OK"
                 : $"{total} game(s) — {issues} with issues (shown in red)";
         }
@@ -132,8 +140,8 @@ namespace GameTaskPlugin
     // =========================================================
     public class RelayCommand : ICommand
     {
-        private readonly Action<object> execute;
-        private readonly Func<object, bool> canExecute;
+        private readonly Action<object>      execute;
+        private readonly Func<object, bool>  canExecute;
 
         public RelayCommand(Action<object> execute, Func<object, bool> canExecute = null)
         {
