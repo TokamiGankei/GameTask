@@ -4,6 +4,26 @@ All notable changes to GameTask are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+
+## [v1.3.0] — 2026-05-24
+
+### Added
+- Notification on startup for games with no detected executable — FocusGuard cannot work for these games without a known process name
+- "Fix All Unknown Executables" in main menu — opens file selection dialog sequentially for each affected game, with Yes/No/Cancel per game; count shown in menu label
+- Child process support in `FocusGuard.exe` — monitors child processes via WMI (read-only, anti-cheat safe) to handle games that spawn a launcher or wrapper before the actual game window appears
+- "Open Data Folder" added to Extensions → GameTask main menu for quick access to logs
+- `FocusGuard.log` written to plugin data `Logs` folder alongside `GameTask.log`
+- Launch cooldown (3 seconds) prevents double-triggering "Create Pending Tasks"
+- Low Performance Mode — increases FocusGuard process/window timeouts and early push count for PCs with limited resources or many open applications; configurable via Settings → Plugins → GameTask
+
+### Fixed
+- File selection dialog now rejects shortcuts (`.lnk`) with a clear warning, preventing accidental selection instead of the actual `.exe`
+
+### Removed
+- `FocusGuard.cs` — obsolete since focus management moved to standalone `GameTask.FocusGuard.exe`
+
+---
+
 ## [v1.2.2] — 2026-05-22
 
 ### Fixed

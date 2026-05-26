@@ -345,7 +345,7 @@ namespace GameTaskPlugin
             actionManager.CreateOrUpdatePlayAction(game, api);
 
             if (!TaskExists(game))
-                taskManager.AddPendingTask(game, ActionName);
+                taskManager.AddPendingTask(game, ActionName, resolvedExe);
 
             ValidateExecutable(game);
         }
@@ -542,7 +542,7 @@ namespace GameTaskPlugin
                 string resolvedExe = ResolveExePathForGame(game);
                 launcherManager.CreateOrUpdateLauncher(game, resolvedExe);
                 actionManager.CreateOrUpdatePlayAction(game, api);
-                taskManager.AddPendingTask(game, ActionName);
+                taskManager.AddPendingTask(game, ActionName, resolvedExe);
 
                 ValidateExecutable(game);
                 logger.Log($"GameTask rebuilt: {game.Name}");
@@ -601,6 +601,38 @@ namespace GameTaskPlugin
                 return;
             }
             lastLaunchTime = now;
+
+            // If PendingTasks.txt is empty, rescan all tagged games for missing tasks
+            // This handles the case where tasks were manually deleted from Task Scheduler
+            var pending = taskManager.GetPendingTasks();
+            if (pending.Count == 0)
+            {
+                logger.Log("PendingTasks.txt is empty — rescanning for missing tasks...");
+                foreach (var game in api.Database.Games.Where(HasGameTaskTag))
+                {
+                    if (!TaskExists(game))
+                    {
+                        string resolvedExe = ResolveExePathForGame(game);
+                        if (!string.IsNullOrWhiteSpace(resolvedExe))
+                        {
+                            taskManager.AddPendingTask(game, ActionName, resolvedExe);
+                            logger.Log($"Re-queued missing task: {game.Name}");
+                        }
+                    }
+                }
+
+                pending = taskManager.GetPendingTasks();
+                if (pending.Count == 0)
+                {
+                    logger.Log("No missing tasks found after rescan.");
+                    api.Notifications.Add(new NotificationMessage(
+                        "GameTaskNoPending",
+                        "GameTask: No pending tasks found. All tasks are already created.",
+                        NotificationType.Info,
+                        null));
+                    return;
+                }
+            }
 
             try
             {
