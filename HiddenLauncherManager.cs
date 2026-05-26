@@ -78,7 +78,7 @@ $failed  = 0
 
 if (!(Test-Path $pendingFile)) {
     Add-Content $logFile 'No PendingTasks.txt found.'
-    Set-Content $resultFile ""created=0|failed=0""
+    Set-Content $resultFile 'created=0|failed=0'
     exit
 }
 
@@ -140,8 +140,88 @@ foreach ($line in $lines) {
 
 Clear-Content $pendingFile
 Set-Content $resultFile ""created=$created|failed=$failed""
-Add-Content $logFile (""created=$created failed=$failed"")
-Add-Content $logFile ('===== CREATE END ' + (Get-Date) + ' =====`n')
+Add-Content $logFile ""created=$created failed=$failed""
+Add-Content $logFile ('===== CREATE END ' + (Get-Date) + ' =====')
+";
+        }
+
+        private string GetDeleteTasksScript()
+        {
+            return @"
+$taskFolder = '\GameTask\'
+$deleteFile = Join-Path $PSScriptRoot 'DeleteTasks.txt'
+$logFile    = Join-Path $PSScriptRoot '..\Logs\PS1.log'
+
+New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
+Add-Content $logFile (""`n===== DELETE START "" + (Get-Date) + "" ====="")`n"")
+
+if (!(Test-Path $deleteFile)) {
+    Add-Content $logFile 'No DeleteTasks.txt found.'
+    exit
+}
+
+$lines = [System.IO.File]::ReadAllLines($deleteFile, [System.Text.Encoding]::UTF8)
+
+foreach ($taskName in $lines) {
+    if ([string]::IsNullOrWhiteSpace($taskName)) { continue }
+
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskFolder -Confirm:$false -ErrorAction SilentlyContinue
+        Add-Content $logFile ""DELETED OR NOT FOUND: $taskName""
+    }
+    catch {
+        Add-Content $logFile ""ERROR deleting task: $taskName -> $_""
+    }
+}
+
+Clear-Content $deleteFile
+Add-Content $logFile ('===== DELETE END ' + (Get-Date) + ' =====')
+";
+        }
+
+        private string GetCleanOrphansScript()
+        {
+            return @"
+$taskFolder     = '\GameTask\'
+$knownTasksFile = Join-Path $PSScriptRoot 'KnownTasks.txt'
+$logFile        = Join-Path $PSScriptRoot '..\Logs\PS1.log'
+
+New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
+Add-Content $logFile (""`n===== CLEAN ORPHANS START "" + (Get-Date) + "" ====="")`n"")
+
+$knownTasks = @()
+if (Test-Path $knownTasksFile) {
+    $knownTasks = [System.IO.File]::ReadAllLines($knownTasksFile, [System.Text.Encoding]::UTF8) |
+                  Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+}
+
+$service = New-Object -ComObject Schedule.Service
+$service.Connect()
+
+try {
+    $folder = $service.GetFolder($taskFolder)
+} catch {
+    Add-Content $logFile 'GameTask folder not found in Task Scheduler - nothing to clean.'
+    exit
+}
+
+$tasks = $folder.GetTasks(0)
+
+foreach ($task in $tasks) {
+    $name = $task.Name
+    if ($knownTasks -notcontains $name) {
+        try {
+            $folder.DeleteTask($name, 0)
+            Add-Content $logFile ""ORPHAN REMOVED: $name""
+        } catch {
+            Add-Content $logFile ""ERROR removing orphan: $name -> $_""
+        }
+    } else {
+        Add-Content $logFile ""KEPT: $name""
+    }
+}
+
+Add-Content $logFile ('===== CLEAN ORPHANS END ' + (Get-Date) + ' =====')
 ";
         }
 
