@@ -5,15 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
-## [v1.4.0] — 2026-05-25
+## [v1.4.0] — 2026-05-26
 
 ### Added
-- Diagnostics page — Extensions → GameTask → Diagnostics; shows all tagged games with task status, detected executable, FocusGuard status and custom path; games with issues highlighted in red
-- Focus guard duration setting — slider from 5s to 120s (default 20s) in Settings → Plugins → GameTask
+- Diagnostics page — accessible via Extensions → GameTask → Diagnostics; shows all tagged games with task status, detected executable, FocusGuard status and custom path; games with issues highlighted in red with a legend in the footer
+- Focus guard duration setting — slider from 5s to 120s (default 20s) in Settings → Plugins → GameTask; increase for games that take long to initialize
+- "Fix All Unknown Executables" in main menu — opens file selection dialog sequentially for each affected game; count shown in menu label
+- "Open Data Folder" added to Extensions → GameTask main menu 
    
 ### Fixed
+- PowerShell syntax error in `CreateTasks.ps1` prevented scheduled tasks from ever being created automatically — this bug was present since v1.0.0; users had to create tasks manually in Task Scheduler as a workaround (reported by @bobokaka)
 - "Enable GameTask" and "Rebuild Selected" not showing pending task notification — `AddPendingTask` was silently skipping games with custom paths or launcher-type actions
-- "Create Pending Tasks" now automatically rescans for missing scheduled tasks when the pending queue is empty (reported by @bobokaka)
+- "Create Pending Tasks" now automatically rescans for missing scheduled tasks when the pending queue is empty — handles cases where tasks were manually deleted from Task Scheduler (reported by @bobokaka)
+- File selection dialog now rejects shortcuts (`.lnk`) with a clear warning message
 
 ---
 
