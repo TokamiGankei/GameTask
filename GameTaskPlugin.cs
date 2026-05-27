@@ -79,15 +79,30 @@ namespace GameTaskPlugin
         public override void OnApplicationStarted(OnApplicationStartedEventArgs args)
         {
             base.OnApplicationStarted(args);
-            ScanLibrary();
 
-            if (settingsManager.Current.DetectOrphanTasks)
-                CheckForOrphanTasks();
+            // Run startup tasks in background to avoid blocking Playnite UI
+            // and prevent the "serious error" crash on slow PCs with many tagged games
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    ScanLibrary();
 
-            if (settingsManager.Current.DetectCorruptedTasks)
-                CheckForCorruptedTasks();
+                    if (settingsManager.Current.DetectOrphanTasks)
+                        CheckForOrphanTasks();
 
-            notificationManager.ShowPendingNotification();
+                    if (settingsManager.Current.DetectCorruptedTasks)
+                        CheckForCorruptedTasks();
+
+                    // ShowPendingNotification must run on UI thread
+                    api.MainView.UIDispatcher.Invoke(() =>
+                        notificationManager.ShowPendingNotification());
+                }
+                catch (Exception ex)
+                {
+                    logger.Log($"ERROR in background startup: {ex.Message}");
+                }
+            });
         }
 
         // =====================================================
@@ -711,9 +726,27 @@ namespace GameTaskPlugin
 
         public string ResolveExePathPublic(Game game) => ResolveExePathForGame(game);
 
+        public bool HasNoGameAction(Game game)
+        {
+            if (game.GameActions == null || !game.GameActions.Any(a =>
+                a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path)))
+                return true;
+            return false;
+        }
+
         public void InvokeFixAllUnknownExecutables() => FixAllUnknownExecutables();
 
         public void InvokeRepairAll() => RepairAll();
+
+        public void InvokeRepairGame(Game game)
+        {
+            RepairGameTask(game);
+            notificationManager.ShowPendingNotification();
+        }
+
+        public void InvokeFixExecutablePath(Game game) => FixExecutablePath(game);
+
+        public void InvokeDisableGame(Game game) => DisableGameTask(new[] { game });
 
         // =====================================================
         // OPEN DIAGNOSTICS
