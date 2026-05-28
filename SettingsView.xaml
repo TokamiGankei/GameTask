@@ -4,13 +4,12 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
-             d:DesignHeight="380" d:DesignWidth="500">
+             d:DesignHeight="480" d:DesignWidth="520">
 
     <StackPanel Margin="20">
 
         <TextBlock Text="GameTask Settings"
-                   FontSize="16"
-                   FontWeight="Bold"
+                   FontSize="16" FontWeight="Bold"
                    Margin="0,0,0,16"/>
 
         <!-- Bring to Foreground -->
@@ -21,23 +20,24 @@
                 <TextBlock.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                            Text="When enabled, GameTask waits for the game process and automatically brings its window to the foreground. Recommended for Playnite fullscreen mode.&#x0a;&#x0a;After changing this setting, run 'Repair All Tagged Games' to regenerate the launchers." />
+                            Text="When enabled, GameTask waits for the game process and automatically brings its window to the foreground. Recommended for Playnite fullscreen mode.&#x0a;&#x0a;Run 'Repair All Tagged Games' after changing this setting." />
                     </ToolTip>
                 </TextBlock.ToolTip>
             </TextBlock>
         </StackPanel>
 
-        <!-- Guard Duration -->
-        <StackPanel Margin="0,8,0,4">
+        <!-- Focus Guard Duration -->
+        <StackPanel Margin="0,12,0,4">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Focus guard duration:" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding Settings.GuardSeconds, StringFormat='{}{0}s'}"
-                           VerticalAlignment="Center" Margin="8,0,0,0" FontWeight="Bold" Width="35"/>
+                <TextBlock Text="{Binding Settings.GuardSeconds, StringFormat='{}{0} seconds'}"
+                           VerticalAlignment="Center" Margin="8,0,0,0"
+                           FontWeight="Bold" Foreground="#FF4A9EFF" MinWidth="70"/>
                 <TextBlock Text="?" VerticalAlignment="Center" Margin="4,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
                     <TextBlock.ToolTip>
                         <ToolTip>
                             <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                                Text="How long FocusGuard keeps the game window in the foreground after launch. Increase this if your game takes a long time to fully initialize and loses focus during loading.&#x0a;&#x0a;Default: 20s. Range: 5s – 120s.&#x0a;&#x0a;Run 'Repair All Tagged Games' after changing this setting." />
+                                Text="How long FocusGuard keeps the game window in the foreground after launch. Increase this if your game takes a long time to fully initialize.&#x0a;&#x0a;Default: 20s. Range: 5s – 120s.&#x0a;&#x0a;Run 'Repair All Tagged Games' after changing this setting." />
                         </ToolTip>
                     </TextBlock.ToolTip>
                 </TextBlock>
@@ -45,50 +45,76 @@
             <Slider Minimum="5" Maximum="120"
                     Value="{Binding Settings.GuardSeconds}"
                     TickFrequency="5" IsSnapToTickEnabled="True"
-                    Margin="0,4,0,0" Width="300" HorizontalAlignment="Left"/>
-            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                    Margin="0,6,0,0" Width="340" HorizontalAlignment="Left"/>
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,0" Width="340">
                 <TextBlock Text="5s" Foreground="Gray" FontSize="10"/>
-                <TextBlock Text="120s" Foreground="Gray" FontSize="10" Margin="270,0,0,0"/>
+                <TextBlock Text="120s" Foreground="Gray" FontSize="10" HorizontalAlignment="Right" Width="320"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Cooldown Duration -->
+        <StackPanel Margin="0,12,0,4">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Create Pending Tasks cooldown:" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Settings.CooldownSeconds, StringFormat='{}{0} seconds'}"
+                           VerticalAlignment="Center" Margin="8,0,0,0"
+                           FontWeight="Bold" Foreground="#FF4A9EFF" MinWidth="70"/>
+                <TextBlock Text="?" VerticalAlignment="Center" Margin="4,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
+                    <TextBlock.ToolTip>
+                        <ToolTip>
+                            <TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="Minimum time between two 'Create Pending Tasks' calls. Prevents accidental double-launch of the UAC prompt.&#x0a;&#x0a;Default: 3s. Range: 1s – 30s." />
+                        </ToolTip>
+                    </TextBlock.ToolTip>
+                </TextBlock>
+            </StackPanel>
+            <Slider Minimum="1" Maximum="30"
+                    Value="{Binding Settings.CooldownSeconds}"
+                    TickFrequency="1" IsSnapToTickEnabled="True"
+                    Margin="0,6,0,0" Width="340" HorizontalAlignment="Left"/>
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,0" Width="340">
+                <TextBlock Text="1s" Foreground="Gray" FontSize="10"/>
+                <TextBlock Text="30s" Foreground="Gray" FontSize="10" HorizontalAlignment="Right" Width="330"/>
             </StackPanel>
         </StackPanel>
 
         <!-- Low Performance Mode -->
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
+        <StackPanel Orientation="Horizontal" Margin="0,12,0,4">
             <CheckBox IsChecked="{Binding Settings.LowPerformanceMode}" VerticalAlignment="Center"/>
             <TextBlock Text="Low Performance Mode" VerticalAlignment="Center" Margin="8,0,0,0"/>
             <TextBlock Text="?" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
                 <TextBlock.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                            Text="Recommended for slower PCs or when many applications are open simultaneously. Increases the time GameTask waits for the game process and window to appear, and adds more foreground push attempts to ensure the game comes to the front reliably.&#x0a;&#x0a;Normal: process timeout 60s, window timeout 30s, 4 early pushes.&#x0a;Low Performance: process timeout 120s, window timeout 60s, 8 early pushes.&#x0a;&#x0a;Run 'Repair All Tagged Games' after changing this setting." />
+                            Text="Recommended for slower PCs or when many applications are open. Increases the time GameTask waits for the game process and window to appear, and adds more foreground push attempts.&#x0a;&#x0a;Normal: process timeout 60s, window timeout 30s, 4 early pushes.&#x0a;Low Performance: process timeout 120s, window timeout 60s, 8 early pushes.&#x0a;&#x0a;Run 'Repair All Tagged Games' after changing this setting." />
                     </ToolTip>
                 </TextBlock.ToolTip>
             </TextBlock>
         </StackPanel>
 
         <!-- Detect Orphan Tasks -->
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
+        <StackPanel Orientation="Horizontal" Margin="0,12,0,4">
             <CheckBox IsChecked="{Binding Settings.DetectOrphanTasks}" VerticalAlignment="Center"/>
             <TextBlock Text="Detect orphan tasks on startup" VerticalAlignment="Center" Margin="8,0,0,0"/>
             <TextBlock Text="?" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
                 <TextBlock.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                            Text="When enabled, GameTask checks the Windows Task Scheduler on every Playnite startup and notifies you if it finds tasks that no longer match any game in your library.&#x0a;&#x0a;You can also trigger this manually via Extensions → GameTask → Clean Orphan Tasks." />
+                            Text="Checks the Windows Task Scheduler on every Playnite startup and notifies you if it finds tasks that no longer match any game in your library." />
                     </ToolTip>
                 </TextBlock.ToolTip>
             </TextBlock>
         </StackPanel>
 
         <!-- Detect Corrupted Tasks -->
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
+        <StackPanel Orientation="Horizontal" Margin="0,12,0,4">
             <CheckBox IsChecked="{Binding Settings.DetectCorruptedTasks}" VerticalAlignment="Center"/>
             <TextBlock Text="Detect corrupted tasks on startup" VerticalAlignment="Center" Margin="8,0,0,0"/>
             <TextBlock Text="?" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="Gray" FontWeight="Bold" Cursor="Help">
                 <TextBlock.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                            Text="When enabled, GameTask checks whether the executable registered for each scheduled task still exists on disk. If a game was moved or uninstalled without disabling GameTask first, the task becomes corrupted and a fix notification will appear." />
+                            Text="Checks whether the executable registered for each scheduled task still exists on disk. If a game was moved or uninstalled without disabling GameTask first, a fix notification will appear." />
                     </ToolTip>
                 </TextBlock.ToolTip>
             </TextBlock>

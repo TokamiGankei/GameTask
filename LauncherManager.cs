@@ -44,16 +44,30 @@ namespace GameTaskPlugin
             string launcherPath = GetLauncherPath(game);
             string taskSafeName = Utils.MakeSafeTaskName(game.Name);
             string taskName     = $"GameTask_v1_{taskSafeName}";
-
-            // 1. Fire the scheduled task (hidden, no wait)
-            string content =
-                "Set shell = CreateObject(\"WScript.Shell\")\r\n" +
-                $"shell.Run \"schtasks /run /tn \" & Chr(34) & \"\\GameTask\\{taskName}\" & Chr(34), 0, False\r\n";
-
-            // 2. Immediately start FocusGuard.exe using the real game exe name
-            string exeFileName = string.IsNullOrWhiteSpace(resolvedExePath)
+            string exeFileName  = string.IsNullOrWhiteSpace(resolvedExePath)
                 ? null
                 : Path.GetFileName(resolvedExePath);
+
+            // Detect Steam games — use steam.exe -applaunch instead of schtasks
+            bool isSteamGame = IsSteamGame(game);
+
+            string launchLine;
+            if (isSteamGame)
+            {
+                string steamAppId  = GetSteamAppId(game);
+                string steamExe    = resolvedExePath ?? @"C:\Program Files (x86)\Steam\steam.exe";
+                launchLine =
+                    $"shell.Run Chr(34) & \"{steamExe}\" & Chr(34) & \" -applaunch {steamAppId}\", 0, False\r\n";
+                // FocusGuard watches steam.exe which spawns the game
+                exeFileName = Path.GetFileName(steamExe);
+            }
+            else
+            {
+                launchLine =
+                    $"shell.Run \"schtasks /run /tn \" & Chr(34) & \"\\GameTask\\{taskName}\" & Chr(34), 0, False\r\n";
+            }
+
+            string content = "Set shell = CreateObject(\"WScript.Shell\")\r\n" + launchLine;
 
             if (settings.Current.BringWindowToForeground &&
                 !string.IsNullOrWhiteSpace(exeFileName) &&
@@ -68,7 +82,29 @@ namespace GameTaskPlugin
             }
 
             File.WriteAllText(launcherPath, content, Encoding.ASCII);
-            logger.Log($"Launcher verified: {game.Name} (exe: {exeFileName ?? "unknown"})");
+            logger.Log($"Launcher verified: {game.Name} (exe: {exeFileName ?? "unknown"}{(isSteamGame ? ", Steam" : "")})");
+        }
+
+        private static bool IsSteamGame(Game game)
+        {
+            if (game.GameActions == null) return false;
+            return game.GameActions.Any(a =>
+                a != null &&
+                !string.IsNullOrWhiteSpace(a.Path) &&
+                a.Path.StartsWith("steam://", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string GetSteamAppId(Game game)
+        {
+            // steam://run/APPID or steam://rungameid/APPID
+            var action = game.GameActions?.FirstOrDefault(a =>
+                a != null && a.Path != null &&
+                a.Path.StartsWith("steam://", StringComparison.OrdinalIgnoreCase));
+
+            if (action == null) return "0";
+
+            var parts = action.Path.Split('/');
+            return parts.Length > 0 ? parts[parts.Length - 1] : "0";
         }
 
         public void RemoveLauncher(Game game)

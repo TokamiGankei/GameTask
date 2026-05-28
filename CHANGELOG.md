@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
+## [v1.5.0] — 2026-05-26
+
+### Added
+- Per-row action buttons in Diagnostics — Repair, Fix Exe and Disable for each game individually
+- Issue hint column in Diagnostics — explains what is wrong and how to fix it for each affected game
+- Detection of games without a GameAction configured — shown with a specific message instead of generic "Unknown"
+
+### Fixed
+- Playnite crash/serious error on startup — `ScanLibrary` and task checks now run in a background thread instead of blocking the UI thread; notifications are dispatched back to the UI thread safely
+
+---
+
 ## [v1.4.0] — 2026-05-26
 
 ### Added

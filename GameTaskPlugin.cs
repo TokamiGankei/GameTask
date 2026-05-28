@@ -38,7 +38,6 @@ namespace GameTaskPlugin
 
         // Cooldown: tracks last launch time to prevent double-launch
         private DateTime lastLaunchTime = DateTime.MinValue;
-        private const int LaunchCooldownMs = 3000;
 
         public GameTaskPlugin(IPlayniteAPI api) : base(api)
         {
@@ -80,8 +79,11 @@ namespace GameTaskPlugin
         {
             base.OnApplicationStarted(args);
 
+            // Trim logs if they exceed 1 MB
+            TrimLog(Path.Combine(pluginDataPath, "Logs", "FocusGuard.log"), maxBytes: 1024 * 1024);
+            TrimLog(Path.Combine(pluginDataPath, "Logs", "PS1.log"),        maxBytes: 1024 * 1024);
+
             // Run startup tasks in background to avoid blocking Playnite UI
-            // and prevent the "serious error" crash on slow PCs with many tagged games
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
@@ -94,7 +96,6 @@ namespace GameTaskPlugin
                     if (settingsManager.Current.DetectCorruptedTasks)
                         CheckForCorruptedTasks();
 
-                    // ShowPendingNotification must run on UI thread
                     api.MainView.UIDispatcher.Invoke(() =>
                         notificationManager.ShowPendingNotification());
                 }
@@ -103,6 +104,27 @@ namespace GameTaskPlugin
                     logger.Log($"ERROR in background startup: {ex.Message}");
                 }
             });
+        }
+
+        private void TrimLog(string logPath, long maxBytes)
+        {
+            try
+            {
+                if (!File.Exists(logPath)) return;
+                var info = new FileInfo(logPath);
+                if (info.Length <= maxBytes) return;
+
+                var content    = File.ReadAllText(logPath);
+                var trimmed    = content.Substring(content.Length / 2);
+                var firstLine  = trimmed.IndexOf('\n');
+                if (firstLine >= 0) trimmed = trimmed.Substring(firstLine + 1);
+
+                File.WriteAllText(logPath,
+                    $"[Log trimmed at {DateTime.Now:yyyy-MM-dd HH:mm:ss} — older entries removed]\r\n" + trimmed);
+
+                logger.Log($"Log trimmed: {Path.GetFileName(logPath)}");
+            }
+            catch (Exception ex) { logger.Log($"ERROR trimming log: {ex.Message}"); }
         }
 
         // =====================================================
@@ -371,17 +393,66 @@ namespace GameTaskPlugin
 
         private string ResolveExePathForGame(Game game)
         {
+            // 1. Custom path takes priority
             string customExe = pathManager.GetCustomPath(game);
             if (!string.IsNullOrWhiteSpace(customExe) && File.Exists(customExe))
                 return customExe;
 
+            // 2. Check GameActions
             var action = game.GameActions?.FirstOrDefault(a =>
                 a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path));
 
-            if (action == null) return null;
+            if (action != null)
+            {
+                // 2a. Steam URL actions (steam://run/APPID) — resolve via steam.exe
+                if (action.Path.StartsWith("steam://", StringComparison.OrdinalIgnoreCase))
+                {
+                    string steamExe = ResolveSteamExe();
+                    if (!string.IsNullOrWhiteSpace(steamExe))
+                        return steamExe;
+                }
 
-            string resolved = taskManager.ResolveExecutable(game, action);
-            return File.Exists(resolved) ? resolved : null;
+                // 2b. Regular exe action
+                string resolved = taskManager.ResolveExecutable(game, action);
+                if (File.Exists(resolved)) return resolved;
+            }
+
+            return null;
+        }
+
+        private string ResolveSteamExe()
+        {
+            // Common Steam installation paths
+            string[] candidates =
+            {
+                @"C:\Program Files (x86)\Steam\steam.exe",
+                @"C:\Program Files\Steam\steam.exe"
+            };
+
+            foreach (var path in candidates)
+                if (File.Exists(path)) return path;
+
+            // Try registry
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine
+                    .OpenSubKey(@"SOFTWARE\WOW6432Node\Valve\Steam") ??
+                    Microsoft.Win32.Registry.LocalMachine
+                    .OpenSubKey(@"SOFTWARE\Valve\Steam");
+
+                if (key != null)
+                {
+                    string installPath = key.GetValue("InstallPath") as string;
+                    if (!string.IsNullOrWhiteSpace(installPath))
+                    {
+                        string steamExe = Path.Combine(installPath, "steam.exe");
+                        if (File.Exists(steamExe)) return steamExe;
+                    }
+                }
+            }
+            catch { }
+
+            return null;
         }
 
         private string ResolveExeNameForGame(Game game)
@@ -608,9 +679,9 @@ namespace GameTaskPlugin
 
         private void RunPendingTasks()
         {
-            // Cooldown — prevent double-launch within 3 seconds
+            // Cooldown — prevent double-launch
             var now = DateTime.UtcNow;
-            if ((now - lastLaunchTime).TotalMilliseconds < LaunchCooldownMs)
+            if ((now - lastLaunchTime).TotalMilliseconds < settingsManager.Current.CooldownSeconds * 1000)
             {
                 logger.Log("RunPendingTasks skipped — cooldown active.");
                 return;
@@ -726,27 +797,9 @@ namespace GameTaskPlugin
 
         public string ResolveExePathPublic(Game game) => ResolveExePathForGame(game);
 
-        public bool HasNoGameAction(Game game)
-        {
-            if (game.GameActions == null || !game.GameActions.Any(a =>
-                a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path)))
-                return true;
-            return false;
-        }
-
         public void InvokeFixAllUnknownExecutables() => FixAllUnknownExecutables();
 
         public void InvokeRepairAll() => RepairAll();
-
-        public void InvokeRepairGame(Game game)
-        {
-            RepairGameTask(game);
-            notificationManager.ShowPendingNotification();
-        }
-
-        public void InvokeFixExecutablePath(Game game) => FixExecutablePath(game);
-
-        public void InvokeDisableGame(Game game) => DisableGameTask(new[] { game });
 
         // =====================================================
         // OPEN DIAGNOSTICS

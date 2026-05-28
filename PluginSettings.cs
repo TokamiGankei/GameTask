@@ -50,6 +50,15 @@ namespace GameTaskPlugin
             set => SetValue(ref guardSeconds, Math.Max(5, Math.Min(120, value)));
         }
 
+        private int cooldownSeconds = 3;
+
+        /// <summary>Minimum seconds between two "Create Pending Tasks" calls.</summary>
+        public int CooldownSeconds
+        {
+            get => cooldownSeconds;
+            set => SetValue(ref cooldownSeconds, Math.Max(1, Math.Min(30, value)));
+        }
+
         // =========================================================
         // FocusGuard parameters — derived from LowPerformanceMode
         // =========================================================
@@ -93,7 +102,8 @@ namespace GameTaskPlugin
                 DetectOrphanTasks       = Settings.DetectOrphanTasks,
                 DetectCorruptedTasks    = Settings.DetectCorruptedTasks,
                 LowPerformanceMode      = Settings.LowPerformanceMode,
-                GuardSeconds            = Settings.GuardSeconds
+                GuardSeconds            = Settings.GuardSeconds,
+                CooldownSeconds         = Settings.CooldownSeconds
             };
         }
 
@@ -104,6 +114,7 @@ namespace GameTaskPlugin
             Settings.DetectCorruptedTasks    = snapshot.DetectCorruptedTasks;
             Settings.LowPerformanceMode      = snapshot.LowPerformanceMode;
             Settings.GuardSeconds            = snapshot.GuardSeconds;
+            Settings.CooldownSeconds         = snapshot.CooldownSeconds;
         }
 
         public void EndEdit() => settingsManager.Save();
@@ -171,6 +182,8 @@ namespace GameTaskPlugin
                             current.LowPerformanceMode = value == "true"; break;
                         case "GuardSeconds":
                             if (int.TryParse(value, out int gs)) current.GuardSeconds = gs; break;
+                        case "CooldownSeconds":
+                            if (int.TryParse(value, out int cs)) current.CooldownSeconds = cs; break;
                     }
                 }
 
@@ -194,7 +207,8 @@ namespace GameTaskPlugin
                     $"DetectOrphanTasks={BoolToStr(current.DetectOrphanTasks)}",
                     $"DetectCorruptedTasks={BoolToStr(current.DetectCorruptedTasks)}",
                     $"LowPerformanceMode={BoolToStr(current.LowPerformanceMode)}",
-                    $"GuardSeconds={current.GuardSeconds}"
+                    $"GuardSeconds={current.GuardSeconds}",
+                    $"CooldownSeconds={current.CooldownSeconds}"
                 };
 
                 File.WriteAllLines(settingsFile, lines, Encoding.UTF8);

@@ -13,7 +13,7 @@ using Playnite.SDK.Models;
 namespace GameTaskPlugin
 {
     // =========================================================
-    // Row model — includes per-row action commands
+    // Row model
     // =========================================================
     public class GameDiagnosticRow : INotifyPropertyChanged
     {
@@ -21,17 +21,16 @@ namespace GameTaskPlugin
         protected void OnPropertyChanged([CallerMemberName] string name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-        public Game   Game          { get; set; }
-        public string Name          { get; set; }
-        public string TaskStatus    { get; set; }
-        public string ExeName       { get; set; }
-        public string FocusStatus   { get; set; }
-        public string CustomPath    { get; set; }
-        public string IssueHint     { get; set; }
-        public bool   HasIssue      { get; set; }
-        public bool   HasNoAction   { get; set; }
+        public Game   Game        { get; set; }
+        public string Name        { get; set; }
+        public string TaskStatus  { get; set; }
+        public string ExeName     { get; set; }
+        public string FocusStatus { get; set; }
+        public string CustomPath  { get; set; }
+        public string IssueHint   { get; set; }
+        public bool   HasIssue    { get; set; }
+        public bool   HasNoAction { get; set; }
 
-        // Per-row commands
         public ICommand RepairCommand  { get; set; }
         public ICommand FixExeCommand  { get; set; }
         public ICommand DisableCommand { get; set; }
@@ -103,66 +102,75 @@ namespace GameTaskPlugin
             IsLoading = true;
             Games     = new ObservableCollection<GameDiagnosticRow>();
 
-            var rows = new ObservableCollection<GameDiagnosticRow>();
-
-            foreach (var game in api.Database.Games
+            var taggedGames = api.Database.Games
                 .Where(plugin.HasGameTaskTagPublic)
-                .OrderBy(g => g.Name))
+                .OrderBy(g => g.Name)
+                .ToList();
+
+            // Run TaskExists checks in background — each schtasks call takes ~200ms
+            System.Threading.Tasks.Task.Run(() =>
             {
-                string customExe   = pathManager.GetCustomPath(game);
-                string resolvedExe = plugin.ResolveExePathPublic(game);
-                string exeFileName = string.IsNullOrWhiteSpace(resolvedExe)
-                    ? "❌ Unknown"
-                    : Path.GetFileName(resolvedExe);
+                var rows = new System.Collections.Generic.List<GameDiagnosticRow>();
 
-                bool taskExists  = TaskExists(game);
-                bool hasExe      = !string.IsNullOrWhiteSpace(resolvedExe);
-                bool hasNoAction = plugin.HasNoGameAction(game);
-                bool hasIssue    = !taskExists || !hasExe;
-
-                string issueHint = "";
-                if (!taskExists && !hasExe)
-                    issueHint = hasNoAction
-                        ? "No GameAction configured — add a Play action in Game Details → Actions"
-                        : "Task missing and exe unknown — use Fix Executable Path";
-                else if (!taskExists)
-                    issueHint = "Task missing — use Repair";
-                else if (!hasExe)
-                    issueHint = hasNoAction
-                        ? "No GameAction configured — add a Play action in Game Details → Actions"
-                        : "Exe unknown — use Fix Executable Path";
-
-                var row = new GameDiagnosticRow
+                foreach (var game in taggedGames)
                 {
-                    Game        = game,
-                    Name        = game.Name,
-                    TaskStatus  = taskExists ? "✅ Created"  : "❌ Missing",
-                    ExeName     = exeFileName,
-                    FocusStatus = hasExe     ? "✅ Active"   : "❌ Inactive",
-                    CustomPath  = string.IsNullOrWhiteSpace(customExe) ? "" : customExe,
-                    IssueHint   = issueHint,
-                    HasIssue    = hasIssue,
-                    HasNoAction = hasNoAction
-                };
+                    string customExe   = pathManager.GetCustomPath(game);
+                    string resolvedExe = plugin.ResolveExePathPublic(game);
+                    string exeFileName = string.IsNullOrWhiteSpace(resolvedExe)
+                        ? "❌ Unknown"
+                        : Path.GetFileName(resolvedExe);
 
-                // Per-row commands
-                var capturedGame = game;
-                row.RepairCommand  = new RelayCommand(_ => { plugin.InvokeRepairGame(capturedGame); Refresh(); });
-                row.FixExeCommand  = new RelayCommand(_ => { plugin.InvokeFixExecutablePath(capturedGame); Refresh(); },
-                                                      _ => !hasNoAction);
-                row.DisableCommand = new RelayCommand(_ => { plugin.InvokeDisableGame(capturedGame); Refresh(); });
+                    bool taskExists  = TaskExists(game);
+                    bool hasExe      = !string.IsNullOrWhiteSpace(resolvedExe);
+                    bool hasNoAction = plugin.HasNoGameAction(game);
+                    bool hasIssue    = !taskExists || !hasExe;
 
-                rows.Add(row);
-            }
+                    string issueHint = "";
+                    if (!taskExists && !hasExe)
+                        issueHint = hasNoAction
+                            ? "No GameAction — add a Play action in Game Details → Actions"
+                            : "Task missing and exe unknown — use Fix Exe";
+                    else if (!taskExists)
+                        issueHint = "Task missing — use Repair";
+                    else if (!hasExe)
+                        issueHint = hasNoAction
+                            ? "No GameAction — add a Play action in Game Details → Actions"
+                            : "Exe unknown — use Fix Exe";
 
-            Games     = rows;
-            IsLoading = false;
+                    var row = new GameDiagnosticRow
+                    {
+                        Game        = game,
+                        Name        = game.Name,
+                        TaskStatus  = taskExists ? "✅ Created"  : "❌ Missing",
+                        ExeName     = exeFileName,
+                        FocusStatus = hasExe     ? "✅ Active"   : "❌ Inactive",
+                        CustomPath  = string.IsNullOrWhiteSpace(customExe) ? "" : customExe,
+                        IssueHint   = issueHint,
+                        HasIssue    = hasIssue,
+                        HasNoAction = hasNoAction
+                    };
 
-            int total  = rows.Count;
-            int issues = rows.Count(r => r.HasIssue);
-            Summary = issues == 0
-                ? $"{total} game(s) — all OK ✅"
-                : $"{total} game(s) — {issues} with issues (shown in red)";
+                    var capturedGame = game;
+                    row.RepairCommand  = new RelayCommand(_ => { plugin.InvokeRepairGame(capturedGame); Refresh(); });
+                    row.FixExeCommand  = new RelayCommand(_ => { plugin.InvokeFixExecutablePath(capturedGame); Refresh(); },
+                                                          _ => !hasNoAction);
+                    row.DisableCommand = new RelayCommand(_ => { plugin.InvokeDisableGame(capturedGame); Refresh(); });
+
+                    rows.Add(row);
+                }
+
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    Games     = new ObservableCollection<GameDiagnosticRow>(rows);
+                    IsLoading = false;
+
+                    int total  = rows.Count;
+                    int issues = rows.Count(r => r.HasIssue);
+                    Summary = issues == 0
+                        ? $"{total} game(s) — all OK ✅"
+                        : $"{total} game(s) — {issues} with issues (shown in red)";
+                });
+            });
         }
 
         private bool TaskExists(Game game)
