@@ -38,6 +38,7 @@ namespace GameTaskPlugin
 
         // Cooldown: tracks last launch time to prevent double-launch
         private DateTime lastLaunchTime = DateTime.MinValue;
+        private const int LaunchCooldownMs = 3000;
 
         public GameTaskPlugin(IPlayniteAPI api) : base(api)
         {
@@ -84,6 +85,7 @@ namespace GameTaskPlugin
             TrimLog(Path.Combine(pluginDataPath, "Logs", "PS1.log"),        maxBytes: 1024 * 1024);
 
             // Run startup tasks in background to avoid blocking Playnite UI
+            // and prevent the "serious error" crash on slow PCs with many tagged games
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
@@ -96,6 +98,7 @@ namespace GameTaskPlugin
                     if (settingsManager.Current.DetectCorruptedTasks)
                         CheckForCorruptedTasks();
 
+                    // ShowPendingNotification must run on UI thread
                     api.MainView.UIDispatcher.Invoke(() =>
                         notificationManager.ShowPendingNotification());
                 }
@@ -106,6 +109,10 @@ namespace GameTaskPlugin
             });
         }
 
+        // =====================================================
+        // LIBRARY SCAN
+        // =====================================================
+
         private void TrimLog(string logPath, long maxBytes)
         {
             try
@@ -114,9 +121,9 @@ namespace GameTaskPlugin
                 var info = new FileInfo(logPath);
                 if (info.Length <= maxBytes) return;
 
-                var content    = File.ReadAllText(logPath);
-                var trimmed    = content.Substring(content.Length / 2);
-                var firstLine  = trimmed.IndexOf('\n');
+                var content   = File.ReadAllText(logPath);
+                var trimmed   = content.Substring(content.Length / 2);
+                var firstLine = trimmed.IndexOf('\n');
                 if (firstLine >= 0) trimmed = trimmed.Substring(firstLine + 1);
 
                 File.WriteAllText(logPath,
@@ -126,10 +133,6 @@ namespace GameTaskPlugin
             }
             catch (Exception ex) { logger.Log($"ERROR trimming log: {ex.Message}"); }
         }
-
-        // =====================================================
-        // LIBRARY SCAN
-        // =====================================================
 
         private void ScanLibrary()
         {
@@ -398,31 +401,25 @@ namespace GameTaskPlugin
             if (!string.IsNullOrWhiteSpace(customExe) && File.Exists(customExe))
                 return customExe;
 
-            // 2. Check GameActions
             var action = game.GameActions?.FirstOrDefault(a =>
                 a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path));
 
-            if (action != null)
-            {
-                // 2a. Steam URL actions (steam://run/APPID) — resolve via steam.exe
-                if (action.Path.StartsWith("steam://", StringComparison.OrdinalIgnoreCase))
-                {
-                    string steamExe = ResolveSteamExe();
-                    if (!string.IsNullOrWhiteSpace(steamExe))
-                        return steamExe;
-                }
+            if (action == null) return null;
 
-                // 2b. Regular exe action
-                string resolved = taskManager.ResolveExecutable(game, action);
-                if (File.Exists(resolved)) return resolved;
+            // 2. Steam URL actions — resolve via steam.exe
+            if (action.Path.StartsWith("steam://", StringComparison.OrdinalIgnoreCase))
+            {
+                string steamExe = ResolveSteamExe();
+                if (!string.IsNullOrWhiteSpace(steamExe)) return steamExe;
             }
 
-            return null;
+            // 3. Regular exe action
+            string resolved = taskManager.ResolveExecutable(game, action);
+            return File.Exists(resolved) ? resolved : null;
         }
 
         private string ResolveSteamExe()
         {
-            // Common Steam installation paths
             string[] candidates =
             {
                 @"C:\Program Files (x86)\Steam\steam.exe",
@@ -432,7 +429,6 @@ namespace GameTaskPlugin
             foreach (var path in candidates)
                 if (File.Exists(path)) return path;
 
-            // Try registry
             try
             {
                 using var key = Microsoft.Win32.Registry.LocalMachine
@@ -797,9 +793,27 @@ namespace GameTaskPlugin
 
         public string ResolveExePathPublic(Game game) => ResolveExePathForGame(game);
 
+        public bool HasNoGameAction(Game game)
+        {
+            if (game.GameActions == null || !game.GameActions.Any(a =>
+                a != null && a.Name != ActionName && !string.IsNullOrWhiteSpace(a.Path)))
+                return true;
+            return false;
+        }
+
         public void InvokeFixAllUnknownExecutables() => FixAllUnknownExecutables();
 
         public void InvokeRepairAll() => RepairAll();
+
+        public void InvokeRepairGame(Game game)
+        {
+            RepairGameTask(game);
+            notificationManager.ShowPendingNotification();
+        }
+
+        public void InvokeFixExecutablePath(Game game) => FixExecutablePath(game);
+
+        public void InvokeDisableGame(Game game) => DisableGameTask(new[] { game });
 
         // =====================================================
         // OPEN DIAGNOSTICS
