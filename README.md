@@ -1,17 +1,30 @@
 # GameTask
 
-A [Playnite](https://playnite.link/) plugin that lets you launch games **without UAC elevation prompts** by registering them as Windows Scheduled Tasks.
+A [Playnite](https://playnite.link/) plugin that lets you launch games **without UAC elevation prompts** by registering them as Windows Scheduled Tasks — giving your setup a console-like feel where games just open, no interruptions.
 
 ---
 
 ## Screenshots
 
-![Context Menu](screenshots/01_menu.png)
-![Choose Executable](screenshots/02_Choice_of_exe.png)
-![Notification](screenshots/03_notification.png)
-![Pending Notification](screenshots/04_notification.png)
-![New Task](screenshots/05_New_Task.png)
-![Action on Game](screenshots/06_Action_on_Game.png)
+<p align="center">
+  <img src="screenshots/01_menu.png" width="380" alt="Right-click menu"/>
+  <img src="screenshots/02_Choice_of_exe.png" width="380" alt="Choose executable"/>
+</p>
+<p align="center">
+  <img src="screenshots/03_notification.png" width="380" alt="Pending task notification"/>
+  <img src="screenshots/04_notification.png" width="380" alt="Notification"/>
+</p>
+<p align="center">
+  <img src="screenshots/05_New_Task.png" width="380" alt="Task Scheduler entry"/>
+  <img src="screenshots/06_Action_on_Game.png" width="380" alt="Play Without UAC action"/>
+</p>
+<p align="center">
+  <img src="screenshots/7_Addons_Settings.png" width="380" alt="Settings page"/>
+  <img src="screenshots/8_Extensions_View.png" width="380" alt="Extensions menu"/>
+</p>
+<p align="center">
+  <img src="screenshots/9_Diagnostics.png" width="380" alt="Diagnostics page"/>
+</p>
 
 ---
 
@@ -21,8 +34,9 @@ When you enable GameTask for a game, it:
 
 1. Creates a small `.vbs` launcher file for the game
 2. Sets that launcher as the **Play Without UAC** action in Playnite
-3. Registers a **Windows Scheduled Task** that runs the game's `.exe` with elevated rights
-4. When you click Play, Playnite calls the launcher → the launcher triggers the scheduled task → the game starts elevated, with no UAC popup, and is automatically brought to the foreground
+3. Registers a **Windows Scheduled Task** that runs the game's `.exe` with elevated rights (`RunLevel Highest`)
+4. When you click Play, Playnite calls the launcher → the launcher triggers the scheduled task → the game starts elevated with no UAC popup
+5. **FocusGuard** (`GameTask.FocusGuard.exe`) runs simultaneously and brings the game window to the foreground automatically — even over Playnite fullscreen and splash screens
 
 ---
 
@@ -45,8 +59,7 @@ When you enable GameTask for a game, it:
 ### Option B — Manual
 
 1. Download and extract the release `.zip`
-2. Copy the folder to:  
-   `%AppData%\Playnite\Extensions\GameTask`
+2. Copy the folder to `%AppData%\Playnite\Extensions\GameTask`
 3. Restart Playnite
 
 ---
@@ -55,29 +68,23 @@ When you enable GameTask for a game, it:
 
 ### Enabling GameTask for a game
 
-1. Right-click a game in Playnite
-2. Go to **GameTask → Enable GameTask**
-3. A notification will appear: *"N game(s) need elevated tasks. Click here."*
-4. Click the notification — a UAC prompt will appear **once** to register the task
-5. Done. The game will now launch without any further UAC prompts
+1. Right-click a game in Playnite → **GameTask → Enable GameTask**
+2. A notification will appear: *"N game(s) need elevated tasks. Click here."*
+3. Click the notification — a UAC prompt will appear **once** to register the task
+4. Done. The game will now launch without any further UAC prompts and will automatically come to the foreground
 
 ### If the executable is not detected automatically
 
-Some games use launchers or non-standard directory structures. In that case:
+Some games use launchers or non-standard directory structures:
 
-1. A red notification will appear for the game
+1. A notification will appear for the affected game
 2. Right-click the game → **GameTask → Fix Executable Path**
-3. A file browser will open — navigate to and select the game's main `.exe`
-4. A confirmation message will appear, and the pending task notification will show up
-5. Click the notification to register the task with elevated rights
+3. Select the game's main `.exe` (shortcuts `.lnk` are rejected automatically)
+4. Click the notification to register the task
 
 ### Removing a custom executable path
 
-If you selected the wrong `.exe` and want to reset:
-
-- Right-click the game → **GameTask → Remove Custom Executable Path**
-
-GameTask will then try to detect the executable automatically again.
+Right-click the game → **GameTask → Remove Custom Executable Path**
 
 ---
 
@@ -101,29 +108,56 @@ GameTask will then try to detect the executable automatically again.
 
 | Menu item | What it does |
 |---|---|
-| Repair All Tagged Games | Runs Repair on every game with the GameTask tag at once |
-| Clean Orphan Tasks | Removes scheduled tasks that no longer have a matching game in the library |
-| Settings → Bring Game to Foreground | Toggles ON/OFF: automatically focuses the game window after launch |
-| Settings → Detect Orphan Tasks on Startup | Toggles ON/OFF: checks for orphan tasks every time Playnite starts |
+| Repair All Tagged Games (N) | Runs Repair on every tagged game at once |
+| Fix All Unknown Executables (N) | Opens file selection for each game with no detected exe |
+| Clean Orphan Tasks | Removes scheduled tasks with no matching game in the library |
+| Open Data Folder | Opens the plugin's data folder (logs, cache, config) |
+| Diagnostics | Opens the Diagnostics window |
+| Settings → ... | Quick-access toggles for all settings |
 
 ---
 
 ## Settings
 
-Settings are toggled directly from **Extensions → GameTask → Settings** and saved automatically. No restart required for most changes — though toggling "Bring Game to Foreground" takes effect after running **Repair All** so the launchers are regenerated.
+Accessible via **Settings → Plugins → GameTask** or via the **Extensions → GameTask → Settings** menu (useful in fullscreen mode).
 
 | Setting | Default | Description |
 |---|---|---|
-| Bring Game to Foreground | ON | After launching, GameTask waits for the game process and brings its window to the front. Useful in Playnite fullscreen mode. |
-| Detect Orphan Tasks on Startup | ON | On each Playnite startup, compares the library against the Task Scheduler and notifies if orphan tasks are found. |
+| Bring Game to Foreground | ON | FocusGuard brings the game window to the front after launch. Works even over Playnite fullscreen and splash screen plugins. |
+| Focus guard duration | 20s | How long FocusGuard keeps the game in the foreground. Increase for games with long loading screens. Range: 5s–120s. |
+| Create Pending Tasks cooldown | 3s | Minimum time between two UAC prompts. Prevents accidental double-launch. Range: 1s–30s. |
+| Low Performance Mode | OFF | Increases timeouts and push attempts for slow PCs or when many apps are open. Run **Repair All** after changing. |
+| Detect Orphan Tasks on Startup | ON | Notifies if the Task Scheduler has tasks with no matching game in the library. |
+| Detect Corrupted Tasks on Startup | ON | Notifies if a game's registered `.exe` no longer exists on disk. |
+
+---
+
+## Diagnostics
+
+Accessible via **Extensions → GameTask → Diagnostics**.
+
+Shows a table of all tagged games with:
+- **Task** — whether the scheduled task exists in Windows Task Scheduler
+- **Executable** — the detected `.exe` for FocusGuard
+- **FocusGuard** — whether the window focus feature is active for this game
+- **Issue / Note** — explains what is wrong and how to fix it
+- **Actions** — per-row Repair, Fix Exe and Disable buttons
+
+Games with issues are highlighted in red.
+
+---
+
+## Steam games
+
+GameTask supports Steam games that use `steam://run/APPID` actions. Instead of a scheduled task, the launcher calls `steam.exe -applaunch APPID` directly. Steam is detected automatically via registry or common installation paths.
 
 ---
 
 ## Orphan task cleanup
 
-An **orphan task** is a Windows Scheduled Task under `\GameTask\` that no longer has a matching game in your Playnite library — for example, after uninstalling or removing a game without using "Disable GameTask" first.
+An **orphan task** is a Windows Scheduled Task under `\GameTask\` that no longer has a matching game in your Playnite library — for example, after uninstalling a game without using "Disable GameTask" first.
 
-GameTask detects these automatically on startup (if enabled) and shows a clickable notification. You can also trigger cleanup manually via **Extensions → GameTask → Clean Orphan Tasks**. Both methods require a one-time UAC prompt to remove the tasks.
+GameTask detects these automatically on startup (if enabled) and shows a clickable notification. You can also trigger cleanup manually via **Extensions → GameTask → Clean Orphan Tasks**.
 
 ---
 
@@ -131,32 +165,30 @@ GameTask detects these automatically on startup (if enabled) and shows a clickab
 
 GameTask uses **Playnite's built-in tracking system** (process name detection). Playtime is recorded automatically as long as the game's main `.exe` is correctly configured.
 
-> **Note for contributors:** The `TrackerManager` class is reserved for future advanced tracking experiments (child process detection, window title tracking, etc.). See its source code for details.
-
 ---
 
 ## Troubleshooting
 
 **The game still shows a UAC prompt**  
-→ The scheduled task may not have been created yet. Look for the notification in Playnite and click it to run the elevated helper.
+→ The scheduled task may not have been created. Click the pending notification or go to **Extensions → GameTask → Repair All Tagged Games** and then click the notification.
 
 **No notification appears after enabling**  
 → Go to **Extensions → GameTask → Repair All Tagged Games**, then click the notification that appears.
 
 **The task was created but the game doesn't launch**  
-→ Right-click the game → **GameTask → Fix Executable Path** and point it to the correct `.exe`
+→ Right-click → **GameTask → Fix Executable Path** and select the correct `.exe`.
 
 **The game launches but opens behind other windows**  
-→ Make sure "Bring Game to Foreground" is ON in **Extensions → GameTask → Settings**, then run **Repair All Tagged Games** to regenerate the launchers.
+→ Make sure "Bring Game to Foreground" is ON. If it still happens on a slow PC, enable **Low Performance Mode** in settings and run **Repair All Tagged Games**.
 
-**I want to start over for a game**  
-→ Right-click → **GameTask → Rebuild Selected**
+**I have leftover tasks from removed games**  
+→ **Extensions → GameTask → Clean Orphan Tasks**
 
-**I have leftover tasks from games I removed**  
-→ Go to **Extensions → GameTask → Clean Orphan Tasks**
+**The Diagnostics page shows issues for some games**  
+→ Use the per-row buttons to Repair, Fix Exe or Disable each game individually.
 
 **Where are the logs?**  
-→ Right-click any game → **GameTask → Open Data Folder** → `Logs\GameTask.log`
+→ **Extensions → GameTask → Open Data Folder** → `Logs\GameTask.log` and `Logs\FocusGuard.log`
 
 ---
 
@@ -164,9 +196,9 @@ GameTask uses **Playnite's built-in tracking system** (process name detection). 
 
 Pull requests are welcome! Areas that would benefit from help:
 
-- **Advanced playtime tracking** — see `TrackerManager.cs` for ideas and integration points
+- **Advanced playtime tracking** — see `TrackerManager.cs` for ideas
 - **Multi-user support** — currently uses `$env:USERNAME` for task principal
-- **Automatic `.pext` build** via GitHub Actions
+- **Support for emulated games** — universal approach for elevation in emulator setups
 
 ---
 
