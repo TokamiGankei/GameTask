@@ -1,0 +1,11 @@
+AddonId: GameTaskPlugin_d6d798db-6a1f-4c6e-9b1d-000000000001
+Packages:
+  - Version: 1.6.0
+    RequiredApiVersion: 6.0.0
+    ReleaseDate: 2026-05-27
+    PackageUrl: https://github.com/TokamiGankei/GameTask/releases/download/v1.6.0/GameTask-1.6.0.pext
+    Changelog:
+      - Configurable cooldown for Create Pending Tasks
+      - Steam game support
+      - Log rotation
+      - Background Diagnostics loading
