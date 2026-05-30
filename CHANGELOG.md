@@ -5,6 +5,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
+## [v1.6.0] — 2026-05-27
+
+### Added
+- Configurable "Create Pending Tasks" cooldown (1s–30s, default 3s) in Settings → Plugins → GameTask
+- Steam game support — games with `steam://` actions now launch via `steam.exe -applaunch APPID` instead of a scheduled task
+- Log rotation — `FocusGuard.log` and `PS1.log` are trimmed to 1 MB on startup to prevent unbounded growth
+- Diagnostics page now loads task status in a background thread — no more UI freeze while checking 20+ games
+- Guard duration and cooldown sliders now show the current value in seconds (e.g. "20 seconds")
+
+### Fixed
+- Diagnostics page could freeze Playnite UI while running `schtasks /query` for each game synchronously
+
+---
+
 ## [v1.5.0] — 2026-05-26
 
 ### Added
