@@ -108,6 +108,18 @@ foreach ($line in $lines) {
         continue
     }
 
+    # Column 3 (WorkingDir) is optional for backward compatibility with older
+    # PendingTasks.txt entries written before WorkingDir support existed.
+    $workingDir = $null
+    if ($parts.Count -ge 3) { $workingDir = $parts[2].Trim() }
+
+    if ([string]::IsNullOrWhiteSpace($workingDir) -or !(Test-Path $workingDir)) {
+        if (-not [string]::IsNullOrWhiteSpace($workingDir)) {
+            Add-Content $logFile ('WorkingDir not found, falling back to exe folder: ' + $workingDir)
+        }
+        $workingDir = Split-Path $exePath -Parent
+    }
+
     $safeName = $gameName -replace '[^a-zA-Z0-9_\- ]', '_'
     $taskName = 'GameTask_v1_' + $safeName
 
@@ -116,8 +128,7 @@ foreach ($line in $lines) {
     } catch {}
 
     try {
-        $exeDir    = Split-Path $exePath -Parent
-        $action    = New-ScheduledTaskAction -Execute $exePath -WorkingDirectory $exeDir
+        $action    = New-ScheduledTaskAction -Execute $exePath -WorkingDirectory $workingDir
         $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive
         $settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         $task      = New-ScheduledTask -Action $action -Principal $principal -Settings $settings

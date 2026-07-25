@@ -47,9 +47,12 @@ namespace GameTaskPlugin
 
             string resolvedExe = resolvedExeOverride;
 
+            // Always try to locate the matching GameAction, even when an override
+            // (custom exe) is supplied, so we can inherit its configured WorkingDir.
+            var action = GetValidAction(game, ignoredActionName);
+
             if (string.IsNullOrWhiteSpace(resolvedExe))
             {
-                var action = GetValidAction(game, ignoredActionName);
                 if (action == null)
                 {
                     logger.Log($"ERROR: No valid action found for: {game.Name}");
@@ -74,7 +77,10 @@ namespace GameTaskPlugin
                 return;
             }
 
-            string entry = $"{game.Name}|{resolvedExe}";
+            string workingDir = ResolveWorkingDirectory(game, action, resolvedExe);
+            logger.Log($"Resolved WorkingDir: {workingDir}");
+
+            string entry = $"{game.Name}|{resolvedExe}|{workingDir}";
 
             var existing = File.ReadAllLines(pendingFile)
                 .Where(l => !l.StartsWith(game.Name + "|", StringComparison.OrdinalIgnoreCase))
@@ -97,9 +103,9 @@ namespace GameTaskPlugin
             logger.Log($"Pending entry removed: {game.Name}");
         }
 
-        public List<(string GameName, string ExePath)> GetPendingTasks()
+        public List<(string GameName, string ExePath, string WorkingDir)> GetPendingTasks()
         {
-            var result = new List<(string, string)>();
+            var result = new List<(string, string, string)>();
             if (!File.Exists(pendingFile)) return result;
 
             foreach (var line in File.ReadAllLines(pendingFile))
@@ -107,7 +113,14 @@ namespace GameTaskPlugin
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = line.Split('|');
                 if (parts.Length < 2) continue;
-                result.Add((parts[0], parts[1]));
+
+                // Backward compatible: older entries (pre WorkingDir support) only
+                // have 2 columns. Fall back to the exe's own folder in that case.
+                string workingDir = parts.Length >= 3 && !string.IsNullOrWhiteSpace(parts[2])
+                    ? parts[2]
+                    : Path.GetDirectoryName(parts[1]);
+
+                result.Add((parts[0], parts[1], workingDir));
             }
 
             return result;
@@ -186,6 +199,38 @@ namespace GameTaskPlugin
                 path = Path.Combine(game.InstallDirectory, path);
 
             return path;
+        }
+
+        /// <summary>
+        /// Resolves the working directory to use when creating the scheduled task.
+        /// Priority:
+        ///   1. The GameAction's own WorkingDir, exactly as configured in Playnite
+        ///      (this is what the user sees/edits in the game's Edit > Actions screen).
+        ///   2. Fallback: the resolved executable's own parent folder (previous
+        ///      GameTask behavior), used when no WorkingDir is configured or when
+        ///      it doesn't resolve to an existing folder.
+        /// </summary>
+        public string ResolveWorkingDirectory(Game game, GameAction action, string resolvedExe)
+        {
+            string workingDir = action?.WorkingDir?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(workingDir))
+            {
+                workingDir = workingDir.Trim('"');
+
+                if (workingDir.Contains("{InstallDir}") && !string.IsNullOrWhiteSpace(game?.InstallDirectory))
+                    workingDir = workingDir.Replace("{InstallDir}", game.InstallDirectory);
+
+                if (!Path.IsPathRooted(workingDir) && !string.IsNullOrWhiteSpace(game?.InstallDirectory))
+                    workingDir = Path.Combine(game.InstallDirectory, workingDir);
+
+                if (Directory.Exists(workingDir))
+                    return workingDir;
+
+                logger.Log($"WARNING: configured WorkingDir not found on disk, falling back to exe folder: {workingDir}");
+            }
+
+            return Path.GetDirectoryName(resolvedExe);
         }
     }
 }

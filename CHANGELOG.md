@@ -5,17 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
-## [v1.6.0] — 2026-05-27
-
-### Added
-- Configurable "Create Pending Tasks" cooldown (1s–30s, default 3s) in Settings → Plugins → GameTask
-- Steam game support — games with `steam://` actions now launch via `steam.exe -applaunch APPID` instead of a scheduled task
-- Log rotation — `FocusGuard.log` and `PS1.log` are trimmed to 1 MB on startup to prevent unbounded growth
-- Diagnostics page now loads task status in a background thread — no more UI freeze while checking 20+ games
-- Guard duration and cooldown sliders now show the current value in seconds (e.g. "20 seconds")
+## [v1.6.1] — 2026-07-25
 
 ### Fixed
-- Diagnostics page could freeze Playnite UI while running `schtasks /query` for each game synchronously
+- Scheduled tasks now respect the Working Directory configured on the game's action in Playnite instead of always forcing the executable's own parent folder — fixes games (e.g. launchers that expect to run from a root folder while the real .exe lives in a subfolder like `Bin\`) that failed to start when their required working directory didn't match the executable's location
+- `PendingTasks.txt` entries now carry the resolved Working Directory alongside the game name and executable path; older 2-column entries are still read correctly (fallback to the executable's folder)
 
 ---
 
