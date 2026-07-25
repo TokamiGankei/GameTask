@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
+## [v1.6.3] — 2026-07-25
+
+### Fixed
+- A single game with a malformed action path/working directory (e.g. stray quotes or arguments pasted from a `.bat` file) could throw an unhandled exception and silently abort scanning the rest of the library on startup — `ScanLibrary` now isolates each game so one bad entry never blocks the others
+- `ResolveExecutable` and `ResolveWorkingDirectory` now catch and log malformed path errors per-action instead of letting them propagate
+
+---
+
 ## [v1.6.2] — 2026-07-25
 
 ### Fixed

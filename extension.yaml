@@ -1,7 +1,7 @@
 Id: GameTaskPlugin_d6d798db-6a1f-4c6e-9b1d-000000000001
 Name: GameTask
 Author: TokamiGankei
-Version: 1.6.2
+Version: 1.6.3
 Module: GameTaskPlugin.dll
 Type: GenericPlugin
 Icon: icon.png

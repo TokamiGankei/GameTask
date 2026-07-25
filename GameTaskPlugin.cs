@@ -141,7 +141,18 @@ namespace GameTaskPlugin
             foreach (var game in api.Database.Games)
             {
                 if (!HasGameTaskTag(game)) continue;
-                RepairGameTask(game);
+
+                try
+                {
+                    RepairGameTask(game);
+                }
+                catch (Exception ex)
+                {
+                    // A single misconfigured game (bad action path, invalid working
+                    // directory, etc.) must never abort scanning the rest of the
+                    // library — log it and keep going.
+                    logger.Log($"ERROR repairing GameTask for {game.Name}: {ex.Message}");
+                }
             }
         }
 

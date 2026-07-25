@@ -223,18 +223,29 @@ namespace GameTaskPlugin
         {
             if (action == null) return null;
 
-            string path = action.Path?.Trim();
-            if (string.IsNullOrWhiteSpace(path)) return null;
+            try
+            {
+                string path = action.Path?.Trim();
+                if (string.IsNullOrWhiteSpace(path)) return null;
 
-            path = path.Trim('"');
+                path = path.Trim('"');
 
-            if (path.Contains("{InstallDir}") && !string.IsNullOrWhiteSpace(game.InstallDirectory))
-                path = path.Replace("{InstallDir}", game.InstallDirectory);
+                if (path.Contains("{InstallDir}") && !string.IsNullOrWhiteSpace(game.InstallDirectory))
+                    path = path.Replace("{InstallDir}", game.InstallDirectory);
 
-            if (!Path.IsPathRooted(path) && !string.IsNullOrWhiteSpace(game.InstallDirectory))
-                path = Path.Combine(game.InstallDirectory, path);
+                if (!Path.IsPathRooted(path) && !string.IsNullOrWhiteSpace(game.InstallDirectory))
+                    path = Path.Combine(game.InstallDirectory, path);
 
-            return path;
+                return path;
+            }
+            catch (Exception ex)
+            {
+                // A malformed action.Path (e.g. stray quotes/arguments pasted from a
+                // .bat file, invalid characters) must never bubble up and abort the
+                // whole library scan — just treat this action as unusable.
+                logger.Log($"WARNING: could not resolve action path for {game?.Name}: {action.Path} -> {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>
@@ -248,25 +259,42 @@ namespace GameTaskPlugin
         /// </summary>
         public string ResolveWorkingDirectory(Game game, GameAction action, string resolvedExe)
         {
-            string workingDir = action?.WorkingDir?.Trim();
-
-            if (!string.IsNullOrWhiteSpace(workingDir))
+            try
             {
-                workingDir = workingDir.Trim('"');
+                string workingDir = action?.WorkingDir?.Trim();
 
-                if (workingDir.Contains("{InstallDir}") && !string.IsNullOrWhiteSpace(game?.InstallDirectory))
-                    workingDir = workingDir.Replace("{InstallDir}", game.InstallDirectory);
+                if (!string.IsNullOrWhiteSpace(workingDir))
+                {
+                    workingDir = workingDir.Trim('"');
 
-                if (!Path.IsPathRooted(workingDir) && !string.IsNullOrWhiteSpace(game?.InstallDirectory))
-                    workingDir = Path.Combine(game.InstallDirectory, workingDir);
+                    if (workingDir.Contains("{InstallDir}") && !string.IsNullOrWhiteSpace(game?.InstallDirectory))
+                        workingDir = workingDir.Replace("{InstallDir}", game.InstallDirectory);
 
-                if (Directory.Exists(workingDir))
-                    return workingDir;
+                    if (!Path.IsPathRooted(workingDir) && !string.IsNullOrWhiteSpace(game?.InstallDirectory))
+                        workingDir = Path.Combine(game.InstallDirectory, workingDir);
 
-                logger.Log($"WARNING: configured WorkingDir not found on disk, falling back to exe folder: {workingDir}");
+                    if (Directory.Exists(workingDir))
+                        return workingDir;
+
+                    logger.Log($"WARNING: configured WorkingDir not found on disk, falling back to exe folder: {workingDir}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Same reasoning as ResolveExecutable: a malformed WorkingDir string
+                // must never abort the whole library scan.
+                logger.Log($"WARNING: could not resolve WorkingDir for {game?.Name}: {action?.WorkingDir} -> {ex.Message}");
             }
 
-            return Path.GetDirectoryName(resolvedExe);
+            try
+            {
+                return Path.GetDirectoryName(resolvedExe);
+            }
+            catch (Exception ex)
+            {
+                logger.Log($"WARNING: could not derive folder from resolved exe for {game?.Name}: {resolvedExe} -> {ex.Message}");
+                return null;
+            }
         }
     }
 }
