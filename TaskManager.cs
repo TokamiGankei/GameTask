@@ -46,13 +46,11 @@ namespace GameTaskPlugin
             if (game == null) return;
 
             string resolvedExe = resolvedExeOverride;
-
-            // Always try to locate the matching GameAction, even when an override
-            // (custom exe) is supplied, so we can inherit its configured WorkingDir.
-            var action = GetValidAction(game, ignoredActionName);
+            GameAction action;
 
             if (string.IsNullOrWhiteSpace(resolvedExe))
             {
+                action = GetValidAction(game, ignoredActionName);
                 if (action == null)
                 {
                     logger.Log($"ERROR: No valid action found for: {game.Name}");
@@ -61,6 +59,15 @@ namespace GameTaskPlugin
 
                 resolvedExe = ResolveExecutable(game, action);
                 logger.Log($"Original Action.Path: {action.Path}");
+            }
+            else
+            {
+                // A custom/override exe was supplied (e.g. manually selected via
+                // "Fix Executable"). Only inherit a WorkingDir from a GameAction
+                // whose own resolved Path points at this exact same exe — grabbing
+                // "the first" action here would risk pulling the WorkingDir from an
+                // unrelated/outdated action and pointing the task at the wrong folder.
+                action = FindActionMatchingExe(game, ignoredActionName, resolvedExe);
             }
 
             logger.Log($"Resolved Path: {resolvedExe}");
@@ -181,6 +188,35 @@ namespace GameTaskPlugin
             if (game.GameActions == null) return null;
             return game.GameActions.FirstOrDefault(
                 a => a != null && a.Name != ignoredActionName && !string.IsNullOrWhiteSpace(a.Path));
+        }
+
+        /// <summary>
+        /// Finds the GameAction (if any) whose resolved executable path matches the
+        /// given exe exactly. Used when a custom/override exe is supplied, so we only
+        /// ever inherit a WorkingDir from the action that actually points at that exe
+        /// — never from an unrelated action that merely happens to be first in the list.
+        /// </summary>
+        private GameAction FindActionMatchingExe(Game game, string ignoredActionName, string resolvedExe)
+        {
+            if (game.GameActions == null || string.IsNullOrWhiteSpace(resolvedExe)) return null;
+
+            foreach (var a in game.GameActions)
+            {
+                if (a == null || a.Name == ignoredActionName || string.IsNullOrWhiteSpace(a.Path)) continue;
+
+                string candidate = ResolveExecutable(game, a);
+                if (string.IsNullOrWhiteSpace(candidate)) continue;
+
+                if (string.Equals(
+                        candidate.TrimEnd('\\'),
+                        resolvedExe.TrimEnd('\\'),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return a;
+                }
+            }
+
+            return null;
         }
 
         public string ResolveExecutable(Game game, GameAction action)

@@ -135,7 +135,7 @@ foreach ($line in $lines) {
         $task.Settings.Priority = 4
 
         Register-ScheduledTask -TaskName $taskName -TaskPath $taskFolder -InputObject $task -Force
-        Add-Content $logFile ('CREATED: ' + $taskName + ' -> ' + $exePath)
+        Add-Content $logFile ('CREATED: ' + $taskName + ' -> ' + $exePath + ' | WorkingDir: ' + $workingDir)
         $created++
     }
     catch {

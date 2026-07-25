@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — ver
 
 ---
 
+## [v1.6.2] — 2026-07-25
+
+### Fixed
+- When a custom/manually-selected executable is used, the plugin no longer blindly inherits the Working Directory from the first GameAction found on the game — it now only inherits from the specific GameAction whose own resolved path matches that exact executable. Previously, games with more than one configured action (e.g. an old auto-detected action plus a manually corrected one) could get the wrong Working Directory, pointing the scheduled task at an outdated or incorrect folder
+- `CreateTasks.ps1` log entries now include the Working Directory used for each created task, making future diagnosis easier without cross-referencing `GameTask.log`
+
+---
+
 ## [v1.6.1] — 2026-07-25
 
 ### Fixed
